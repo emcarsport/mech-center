@@ -1,0 +1,40 @@
+{
+  "name": "Mech Center — Emcar Sport",
+  "short_name": "Mech Center",
+  "description": "Workshop Planning & Workload Monitoring — Emcar Sport",
+  "start_url": "./planning.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a0f18",
+  "theme_color": "#0a0f18",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau Servicing",
+      "short_name": "Servicing",
+      "url": "./planning.html?action=servicing",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nouveau Montage",
+      "short_name": "Montage",
+      "url": "./planning.html?action=montage",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

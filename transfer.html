@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transferts | Emcar Sport</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap');
+        body { font-family: 'Barlow Condensed', sans-serif; }
+        .btn-orange { background: #e67e22; transition: all 0.2s; }
+        .btn-orange:hover { background: #cf6d17; box-shadow: 0 4px 16px rgba(230,126,34,0.4); }
+        .input-focus { transition: all 0.15s; }
+        .input-focus:focus { border-color: #e67e22; box-shadow: 0 0 0 3px rgba(230,126,34,0.1); }
+        .toast { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .arrow-animate { animation: arrowPulse 1.5s ease-in-out infinite; }
+        @keyframes arrowPulse { 0%,100%{transform:translateX(0)} 50%{transform:translateX(5px)} }
+        .card-in { animation: cardIn 0.4s ease-out; }
+        @keyframes cardIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    </style>
+</head>
+<body class="bg-[#f0f4f8] italic uppercase text-[11px] min-h-screen">
+
+    <!-- NAV -->
+    <nav class="bg-[#0a0f18] text-white px-5 py-3 flex justify-between items-center shadow-2xl border-b-2 border-[#e67e22] sticky top-0 z-50">
+        <div class="flex items-center gap-4 cursor-pointer" onclick="window.location.href='index.html'">
+            <div class="bg-white p-1.5 rounded-xl shadow-inner">
+                <img src="https://raw.githubusercontent.com/cyclingandtrailspecialist-collab/emcar-sport/main/images.png" alt="Emcar Sport" class="h-9 w-auto object-contain">
+            </div>
+            <div class="flex flex-col leading-none">
+                <span class="text-xl font-black tracking-tighter italic">TRANS <span class="text-[#e67e22]">LOGISTICS</span></span>
+                <span class="text-[7px] tracking-[0.2em] text-slate-400 font-bold not-italic">INTER-STORE TRANSFER</span>
+            </div>
+        </div>
+        <button onclick="window.location.href='index.html'" class="bg-slate-700 hover:bg-slate-600 px-4 py-2.5 rounded-xl text-[11px] font-black tracking-widest transition-colors italic uppercase">RETOUR</button>
+    </nav>
+
+    <div class="p-6 max-w-2xl mx-auto">
+
+        <!-- Form Card -->
+        <div class="bg-white rounded-[2rem] shadow-xl overflow-hidden border-t-4 border-[#e67e22] card-in mb-6">
+            <div class="bg-orange-50/50 px-8 py-5 border-b border-orange-100">
+                <p class="text-[#e67e22] text-[9px] font-black tracking-[0.25em] not-italic mb-0.5">EMCAR SPORT LOGISTIQUE</p>
+                <h2 class="text-3xl font-black text-slate-900 tracking-tighter italic">NOUVEAU TRANSFERT</h2>
+            </div>
+
+            <div class="p-8">
+                <div class="grid grid-cols-2 gap-5">
+
+                    <!-- Item Code -->
+                    <div>
+                        <label class="text-slate-400 text-[9px] mb-1.5 block font-black uppercase tracking-widest not-italic">Code SAP</label>
+                        <input id="t_code" placeholder="Ex: P001234" class="w-full border-2 border-slate-100 p-3.5 rounded-xl outline-none input-focus bg-slate-50 font-black text-sm italic uppercase placeholder:not-italic placeholder:normal-case placeholder:text-slate-300">
+                    </div>
+
+                    <!-- Modèle -->
+                    <div>
+                        <label class="text-slate-400 text-[9px] mb-1.5 block font-black uppercase tracking-widest not-italic">Modèle du vélo</label>
+                        <input id="t_model" placeholder="Ex: Cannondale Scalpel" class="w-full border-2 border-slate-100 p-3.5 rounded-xl outline-none input-focus bg-slate-50 font-black text-sm italic uppercase placeholder:not-italic placeholder:normal-case placeholder:text-slate-300">
+                    </div>
+
+                    <!-- Désignation -->
+                    <div class="col-span-2">
+                        <label class="text-[#e67e22] text-[9px] mb-1.5 block font-black uppercase tracking-widest not-italic">Désignation pièce / vélo <span class="text-red-400">*</span></label>
+                        <input id="t_item" placeholder="Ex: Paire de roues, dérailleur..." class="w-full border-2 border-orange-100 p-3.5 rounded-xl outline-none input-focus bg-orange-50/50 font-black text-sm italic uppercase placeholder:not-italic placeholder:normal-case placeholder:text-slate-300">
+                    </div>
+
+                    <!-- Source → Dest avec visuel -->
+                    <div class="col-span-2">
+                        <label class="text-slate-400 text-[9px] mb-1.5 block font-black uppercase tracking-widest not-italic">Itinéraire</label>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1">
+                                <p class="text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest mb-1">De (Source)</p>
+                                <select id="t_from" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm italic uppercase cursor-pointer outline-none input-focus bg-slate-50">
+                                    <option value="Pailles Warehouse">Pailles Warehouse</option>
+                                    <option value="Bell Village">Bell Village</option>
+                                    <option value="Black River">Black River</option>
+                                    <option value="Forbach">Forbach</option>
+                                    <option value="Flacq">Flacq</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col items-center pt-5">
+                                <div class="w-10 h-10 bg-[#e67e22] rounded-full flex items-center justify-center shadow-lg">
+                                    <span class="text-white text-lg arrow-animate">→</span>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest mb-1">Vers (Destination)</p>
+                                <select id="t_to" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm italic uppercase cursor-pointer outline-none input-focus bg-slate-50">
+                                    <option value="Bell Village">Bell Village</option>
+                                    <option value="Black River">Black River</option>
+                                    <option value="Forbach">Forbach</option>
+                                    <option value="Flacq">Flacq</option>
+                                    <option value="Pailles Warehouse">Pailles Warehouse</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="col-span-2">
+                        <label class="text-slate-400 text-[9px] mb-1.5 block font-black uppercase tracking-widest not-italic">Notes spécifiques</label>
+                        <textarea id="t_notes" placeholder="Instructions particulières, urgence, référence..." class="w-full border-2 border-slate-100 p-3.5 rounded-xl h-24 font-black text-sm bg-slate-50 outline-none input-focus italic uppercase placeholder:not-italic placeholder:normal-case placeholder:text-slate-300 resize-none"></textarea>
+                    </div>
+
+                    <!-- Submit -->
+                    <button onclick="sendTransfer()" id="transBtn" class="col-span-2 btn-orange text-white py-4 rounded-2xl font-black shadow-xl tracking-[0.15em] text-[13px] italic uppercase flex items-center justify-center gap-3">
+                        <span class="text-xl">🚚</span> ENREGISTRER LE TRANSFERT
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info badge -->
+        <div class="flex items-center gap-3 bg-white/80 rounded-2xl px-5 py-4 shadow-sm border border-slate-100">
+            <div class="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-[#e67e22]">📧</span>
+            </div>
+            <p class="text-slate-500 text-[9px] font-black not-italic uppercase tracking-widest leading-relaxed">
+                Un email de confirmation sera envoyé automatiquement à l'équipe logistique.
+            </p>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 z-[9999] bg-[#0a0f18] text-white px-6 py-4 rounded-2xl shadow-2xl toast flex items-center gap-3">
+        <span id="toastIcon" class="text-xl">✅</span>
+        <span id="toastMsg" class="font-black text-sm italic uppercase tracking-wide">Transfert enregistré</span>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrpGb7CVA4SFYGw2iGEQaacD1DWueysMg7Tgjm15g_bPY6J-Zh_pFA8Vha3aFi7a-F/exec";
+
+        function showToast(msg, icon = "✅") {
+            const t = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            document.getElementById('toastIcon').innerText = icon;
+            t.classList.remove('hidden');
+            t.classList.add('flex');
+            setTimeout(() => { t.classList.add('hidden'); t.classList.remove('flex'); }, 3500);
+        }
+
+        async function sendTransfer() {
+            const btn = document.getElementById('transBtn');
+            const item = document.getElementById('t_item').value.trim();
+
+            if (!item) {
+                showToast("Désignation obligatoire !", "⚠️");
+                document.getElementById('t_item').focus();
+                return;
+            }
+
+            const fromVal = document.getElementById('t_from').value;
+            const toVal = document.getElementById('t_to').value;
+            if (fromVal === toVal) {
+                showToast("Source et destination identiques !", "⚠️");
+                return;
+            }
+
+            btn.innerHTML = `<span class="animate-spin text-xl">⏳</span> ENVOI EN COURS...`;
+            btn.disabled = true;
+
+            const transferData = {
+                action: "transfer",
+                transfer: {
+                    item: item,
+                    code: document.getElementById('t_code').value,
+                    model: document.getElementById('t_model').value,
+                    from: fromVal,
+                    to: toVal,
+                    notes: document.getElementById('t_notes').value
+                }
+            };
+
+            try {
+                // ✅ FIX CORS : pas de Content-Type custom → évite le preflight bloqué par GAS
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(transferData)
+                });
+                showToast("Transfert enregistré !", "✅");
+                setTimeout(() => window.location.href = 'index.html', 1800);
+            } catch (e) {
+                showToast("Erreur de connexion", "❌");
+                btn.disabled = false;
+                btn.innerHTML = `<span class="text-xl">🚚</span> ENREGISTRER LE TRANSFERT`;
+            }
+        }
+    </script>
+</body>
+</html>

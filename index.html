@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Emcar Sport</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,900&display=swap');
+        body { font-family: 'Barlow Condensed', sans-serif; overflow-x: hidden; }
+        .stats-card { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+        .nav-card { cursor: pointer; transition: all 0.3s ease; }
+        .nav-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="bg-[#0a0f18] text-white italic uppercase min-h-screen flex items-center justify-center">
+
+    <div id="loginSection" class="w-full max-w-md p-8 bg-white rounded-[2rem] text-slate-900 shadow-2xl mx-4">
+        <img src="https://raw.githubusercontent.com/cyclingandtrailspecialist-collab/emcar-sport/main/images.png" class="h-16 mx-auto mb-6">
+        <h2 class="text-3xl font-black text-center mb-6 italic uppercase tracking-tighter">ACCÈS RÉSERVÉ</h2>
+        <div class="space-y-4">
+            <input type="text" id="user" placeholder="UTILISATEUR" class="w-full p-4 border-2 border-slate-100 rounded-2xl font-black outline-none focus:border-[#004a99] uppercase italic text-slate-900">
+            <input type="password" id="pass" placeholder="MOT DE PASSE" class="w-full p-4 border-2 border-slate-100 rounded-2xl font-black outline-none focus:border-[#004a99] uppercase italic text-slate-900">
+            <button onclick="checkLogin()" class="w-full bg-[#004a99] text-white py-4 rounded-2xl font-black hover:bg-blue-700 transition-all uppercase italic">SE CONNECTER</button>
+        </div>
+    </div>
+
+    <div id="dashSection" class="hidden max-w-7xl w-full p-6 text-center">
+        <img src="https://raw.githubusercontent.com/cyclingandtrailspecialist-collab/emcar-sport/main/images.png" alt="Emcar Sport" class="h-20 mx-auto mb-8 bg-white p-2 rounded-lg object-contain shadow-xl">
+        <h1 class="text-5xl font-black tracking-tighter mb-10 italic uppercase">WORKSHOP <span class="text-[#004a99]">MANAGEMENT</span></h1>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+            <div onclick="goTo('planning.html')" class="nav-card bg-white text-slate-900 p-8 rounded-3xl hover:bg-[#004a99] hover:text-white shadow-2xl flex flex-col justify-center items-center">
+                <div class="text-6xl mb-4">📅</div>
+                <div class="text-3xl font-black leading-none italic uppercase">Planning<br><span class="text-sm opacity-50 uppercase">Atelier</span></div>
+            </div>
+
+            <div onclick="goTo('transfer.html')" class="nav-card bg-white text-slate-900 p-8 rounded-3xl hover:bg-[#e67e22] hover:text-white shadow-2xl flex flex-col justify-center items-center">
+                <div class="text-6xl mb-4">🚚</div>
+                <div class="text-3xl font-black leading-none italic uppercase font-black">Transferts<br><span class="text-sm opacity-50 uppercase">Logistique</span></div>
+            </div>
+
+            <div class="lg:col-span-2 stats-card p-8 rounded-3xl border-2 border-slate-800 shadow-2xl text-left">
+                <h3 class="text-2xl font-black italic text-blue-400 uppercase mb-6">STATS WORKSHOP</h3>
+                <div class="grid grid-cols-3 gap-4 font-black">
+                    <div class="bg-slate-800/40 p-5 rounded-2xl">
+                        <p class="text-[10px] text-slate-400 mb-2">AUJOURD'HUI</p>
+                        <p id="day-total" class="text-6xl font-black italic mb-3">0</p>
+                        <div class="text-[11px] space-y-1 border-t border-slate-700 pt-3 italic">
+                            <div class="flex justify-between"><span class="text-blue-400 font-black">S:</span><span id="day-serv">0</span></div>
+                            <div class="flex justify-between"><span class="text-[#e67e22] font-black">M:</span><span id="day-mont">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/40 p-5 rounded-2xl font-black">
+                        <p class="text-[10px] text-slate-400 mb-2 font-black">SEMAINE</p>
+                        <p id="week-total" class="text-6xl font-black italic mb-3">0</p>
+                        <div class="text-[11px] space-y-1 border-t border-slate-700 pt-3 italic font-black">
+                            <div class="flex justify-between font-black"><span class="text-blue-400 font-black">S:</span><span id="week-serv">0</span></div>
+                            <div class="flex justify-between font-black"><span class="text-[#e67e22] font-black">M:</span><span id="week-mont">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/40 p-5 rounded-2xl">
+                        <p class="text-[10px] text-slate-400 mb-2">MOIS</p>
+                        <p id="month-total" class="text-6xl font-black italic mb-3">0</p>
+                        <div class="text-[11px] space-y-1 border-t border-slate-700 pt-3 italic">
+                            <div class="flex justify-between"><span class="text-blue-400 font-black">S:</span><span id="month-serv">0</span></div>
+                            <div class="flex justify-between"><span class="text-[#e67e22] font-black">M:</span><span id="month-mont">0</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="logout()" class="mt-12 text-slate-500 text-[10px] tracking-[0.3em] font-bold uppercase italic hover:text-red-500">
+            DÉCONNEXION / SESSION : <span id="currentUser" class="text-blue-500"></span>
+        </button>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrpGb7CVA4SFYGw2iGEQaacD1DWueysMg7Tgjm15g_bPY6J-Zh_pFA8Vha3aFi7a-F/exec";
+        const CREDENTIALS = { "xavier": "emcar2026", "admin": "emcar2026" };
+
+        function checkLogin() {
+            const u = document.getElementById('user').value.toLowerCase();
+            const p = document.getElementById('pass').value;
+            if(CREDENTIALS[u] && CREDENTIALS[u] === p) {
+                localStorage.setItem('emcar_auth', u);
+                showDashboard(u);
+            } else { alert("Erreur d'accès"); }
+        }
+
+        function showDashboard(user) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('dashSection').style.display = 'block';
+            document.getElementById('currentUser').innerText = user;
+            loadStats();
+        }
+
+        function goTo(page) {
+            // Force la navigation absolue
+            window.location.href = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1) + page;
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(SCRIPT_URL + "?getTasks=true");
+                const tasks = await res.json();
+                const now = new Date();
+                let s = { d:0, w:0, m:0 }, m = { d:0, w:0, m:0 };
+                tasks.forEach(t => {
+                    const tDate = new Date(t.date);
+                    if(isNaN(tDate)) return;
+                    const isDay = tDate.toDateString() === now.toDateString();
+                    const isMonth = tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+                    const diffDays = Math.ceil(Math.abs(now - tDate) / (1000 * 60 * 60 * 24));
+                    if(t.type === "Servicing") {
+                        if(isDay) s.d++; if(diffDays <= 7) s.w++; if(isMonth) s.m++;
+                    } else if(t.type === "Montage") {
+                        if(isDay) m.d++; if(diffDays <= 7) m.w++; if(isMonth) m.m++;
+                    }
+                });
+                document.getElementById('day-total').innerText = s.d + m.d;
+                document.getElementById('day-serv').innerText = s.d;
+                document.getElementById('day-mont').innerText = m.d;
+                document.getElementById('week-total').innerText = s.w + m.w;
+                document.getElementById('week-serv').innerText = s.w;
+                document.getElementById('week-mont').innerText = m.w;
+                document.getElementById('month-total').innerText = s.m + m.m;
+                document.getElementById('month-serv').innerText = s.m;
+                document.getElementById('month-mont').innerText = m.m;
+            } catch(e) {}
+        }
+
+        if(localStorage.getItem('emcar_auth')) showDashboard(localStorage.getItem('emcar_auth'));
+    </script>
+</body>
+</html>
