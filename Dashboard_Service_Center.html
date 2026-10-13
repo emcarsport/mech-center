@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDV Dashboard | Emcar Sport</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap');
+        body { font-family: 'Barlow Condensed', sans-serif; }
+        .status-badge { display:inline-flex; align-items:center; gap:4px; }
+        .card-hover { transition: all 0.2s; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -6px rgba(0,74,153,0.15); }
+        .slide-in { animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+        ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-thumb { background:#004a99; border-radius:10px; }
+    </style>
+</head>
+<body class="bg-[#f0f4f8] italic uppercase text-[11px]">
+
+    <!-- NAV -->
+    <nav class="bg-[#0a0f18] text-white px-6 py-3 flex justify-between items-center shadow-2xl border-b-2 border-[#004a99] sticky top-0 z-50">
+        <div class="flex items-center gap-4">
+            <img src="https://raw.githubusercontent.com/cyclingandtrailspecialist-collab/emcar-sport/main/images.png" class="h-9 bg-white p-1 rounded-lg object-contain">
+            <div>
+                <p class="text-xl font-black tracking-tighter italic">RDV <span class="text-[#004a99]">DASHBOARD</span></p>
+                <p class="text-[7px] tracking-widest text-slate-400 font-bold not-italic">GESTION DES RENDEZ-VOUS ATELIER</p>
+            </div>
+        </div>
+        <div class="flex gap-2 items-center">
+            <button onclick="loadRDV()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-black text-[11px] transition-all flex items-center gap-1.5">🔄 ACTUALISER</button>
+            <button onclick="exportRapport()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-black text-[11px] transition-all flex items-center gap-1.5">📊 RAPPORT CSV</button>
+            <button onclick="toggleWaitlist()" class="bg-[#e67e22] hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-black text-[11px] transition-all flex items-center gap-1.5">📋 LISTE ATTENTE</button>
+            <a href="rdv-form.html" target="_blank" class="bg-[#004a99] hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-black text-[11px] transition-all flex items-center gap-1.5">📋 FORMULAIRE</a>
+            <button onclick="window.location.href='index.html'" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-black text-[11px] transition-all">DASHBOARD</button>
+        </div>
+    </nav>
+
+    <main class="p-6 space-y-6 max-w-7xl mx-auto">
+
+        <!-- STATS CARDS -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-[#004a99] card-hover">
+                <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic mb-1">AUJOURD'HUI</p>
+                <p id="stat-today" class="text-5xl font-black text-[#004a99] italic">0</p>
+                <p class="text-[9px] text-slate-400 font-black not-italic mt-1">RDV planifiés</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-emerald-500 card-hover">
+                <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic mb-1">CONFIRMÉS</p>
+                <p id="stat-confirmed" class="text-5xl font-black text-emerald-500 italic">0</p>
+                <p class="text-[9px] text-slate-400 font-black not-italic mt-1">Cette semaine</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-yellow-500 card-hover">
+                <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic mb-1">EN ATTENTE</p>
+                <p id="stat-pending" class="text-5xl font-black text-yellow-500 italic">0</p>
+                <p class="text-[9px] text-slate-400 font-black not-italic mt-1">À confirmer</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-slate-400 card-hover">
+                <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic mb-1">TOTAL</p>
+                <p id="stat-total" class="text-5xl font-black text-slate-600 italic">0</p>
+                <p class="text-[9px] text-slate-400 font-black not-italic mt-1">Ce mois</p>
+            </div>
+        </div>
+
+        <!-- GRAPHIQUES + ACTIVITE -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Graphique semaine -->
+            <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-5">
+                    <div>
+                        <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic">APERÇU</p>
+                        <h3 class="text-xl font-black text-slate-900 italic">RDV PAR JOUR</h3>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="setChart('week')" id="chartWeek" class="chart-btn bg-[#004a99] text-white px-3 py-1.5 rounded-lg text-[9px] font-black not-italic uppercase transition-all">Semaine</button>
+                        <button onclick="setChart('month')" id="chartMonth" class="chart-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black not-italic uppercase transition-all">Mois</button>
+                    </div>
+                </div>
+                <canvas id="rdvChart" height="120"></canvas>
+            </div>
+
+            <!-- Services breakdown -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm">
+                <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic mb-1">RÉPARTITION</p>
+                <h3 class="text-xl font-black text-slate-900 italic mb-5">PAR SERVICE</h3>
+                <canvas id="serviceChart" height="200"></canvas>
+                <div id="service-legend" class="mt-4 space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- LISTE RDV ACTIFS -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <p class="text-[9px] font-black text-slate-400 tracking-widest not-italic">LISTE</p>
+                    <h3 class="text-xl font-black text-slate-900 italic">RENDEZ-VOUS</h3>
+                </div>
+                <div class="flex gap-2">
+                    <input id="search" oninput="filterRDV()" placeholder="Rechercher..." class="border-2 border-slate-100 px-3 py-2 rounded-xl text-[11px] font-black not-italic normal-case outline-none focus:border-[#004a99] bg-slate-50 w-44">
+                    <select id="filterStatus" onchange="filterRDV()" class="border-2 border-slate-100 px-3 py-2 rounded-xl text-[11px] font-black italic uppercase cursor-pointer outline-none focus:border-[#004a99] bg-slate-50">
+                        <option value="">Tous statuts</option>
+                        <option value="En attente">En attente</option>
+                        <option value="Confirmé">Confirmé</option>
+                        <option value="En cours">En cours</option>
+                        <option value="En attente de pièces">Attente pièces</option>
+                        <option value="Prêt">Prêt</option>
+                        <option value="Annulé">Annulé</option>
+                        <option value="Terminé">Terminé</option>
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-100">
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Ref</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Client</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Service</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Date & Heure</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Magasin</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Statut</th>
+                            <th class="px-5 py-3 text-left text-[9px] font-black text-slate-400 tracking-widest not-italic uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rdv-table-body">
+                        <tr><td colspan="7" class="px-5 py-12 text-center text-slate-300 text-sm not-italic normal-case">Chargement des rendez-vous...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- STATUS MODAL -->
+    <div id="statusModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl">
+            <h3 class="text-2xl font-black text-slate-900 italic tracking-tighter uppercase mb-2">Changer statut</h3>
+            <p id="modal-client" class="text-slate-500 text-sm not-italic normal-case mb-5"></p>
+            <input type="hidden" id="modal-rdv-id">
+            <div class="space-y-2 mb-6">
+                <button onclick="setStatus('En attente')"          class="w-full py-3 rounded-xl border-2 border-yellow-200 text-yellow-700 font-black text-[11px] hover:bg-yellow-50 transition-all italic uppercase">⏳ EN ATTENTE</button>
+                <button onclick="setStatus('Confirmé')"            class="w-full py-3 rounded-xl border-2 border-emerald-200 text-emerald-700 font-black text-[11px] hover:bg-emerald-50 transition-all italic uppercase">✅ CONFIRMÉ</button>
+                <button onclick="setStatus('En cours')"            class="w-full py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-black text-[11px] hover:bg-blue-50 transition-all italic uppercase">🔧 EN COURS</button>
+                <button onclick="setStatus('En attente de pièces')" class="w-full py-3 rounded-xl border-2 border-orange-200 text-orange-600 font-black text-[11px] hover:bg-orange-50 transition-all italic uppercase">⏳ EN ATTENTE DE PIÈCES</button>
+                <button onclick="setStatus('Prêt')"                class="w-full py-3 rounded-xl border-2 border-green-200 text-green-700 font-black text-[11px] hover:bg-green-50 transition-all italic uppercase">🎉 PRÊT</button>
+                <button onclick="setStatus('Terminé')"             class="w-full py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-black text-[11px] hover:bg-slate-50 transition-all italic uppercase">🏁 TERMINÉ</button>
+                <button onclick="setStatus('Annulé')"              class="w-full py-3 rounded-xl border-2 border-red-200 text-red-500 font-black text-[11px] hover:bg-red-50 transition-all italic uppercase">❌ ANNULÉ</button>
+            </div>
+            <button onclick="closeStatusModal()" class="w-full py-3 rounded-xl bg-slate-100 text-slate-500 font-black text-[11px] hover:bg-slate-200 transition-all italic uppercase">FERMER</button>
+        </div>
+    </div>
+
+    <!-- WAITLIST PANEL -->
+    <div id="waitlistPanel" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden">
+            <div class="bg-[#e67e22] px-8 py-5 flex justify-between items-center">
+                <div>
+                    <p class="text-orange-200 text-[9px] font-black tracking-widest not-italic uppercase">EMCAR SPORT</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">LISTE D'ATTENTE</h2>
+                </div>
+                <button onclick="toggleWaitlist()" class="w-9 h-9 rounded-full bg-orange-600 hover:bg-red-600 text-white flex items-center justify-center text-xl font-bold transition-all">×</button>
+            </div>
+            <div id="waitlist-content" class="p-6 max-h-[60vh] overflow-y-auto">
+                <p class="text-slate-400 text-sm not-italic normal-case text-center py-8">Chargement...</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrpGb7CVA4SFYGw2iGEQaacD1DWueysMg7Tgjm15g_bPY6J-Zh_pFA8Vha3aFi7a-F/exec";
+    let allRDV = [], rdvChart = null, serviceChart = null, currentChartPeriod = 'week';
+
+    const STATUS_STYLES = {
+        'En attente':          'bg-yellow-100 text-yellow-700',
+        'Confirmé':            'bg-emerald-100 text-emerald-700',
+        'En cours':            'bg-blue-100 text-blue-700',
+        'En attente de pièces':'bg-orange-100 text-orange-600',
+        'Prêt':                'bg-green-100 text-green-700',
+        'Terminé':             'bg-slate-100 text-slate-500',
+        'Annulé':              'bg-red-100 text-red-500'
+    };
+
+    async function loadRDV() {
+        try {
+            const res  = await fetch(SCRIPT_URL + '?getRDV=true');
+            allRDV = await res.json();
+            updateStats();
+            renderTable(allRDV);
+            renderCharts();
+        } catch(e) {
+            console.error('Load RDV:', e);
+            document.getElementById('rdv-table-body').innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-red-400 text-sm not-italic normal-case">Erreur de chargement</td></tr>';
+        }
+    }
+
+    function updateStats() {
+        const today = new Date().toISOString().split('T')[0];
+        const now   = new Date();
+        const monday = new Date(now); monday.setDate(now.getDate()-(now.getDay()===0?6:now.getDay()-1)); monday.setHours(0,0,0,0);
+        const sunday = new Date(monday); sunday.setDate(monday.getDate()+6); sunday.setHours(23,59,59,999);
+
+        const todayRDV    = allRDV.filter(r => r.date === today).length;
+        const confirmedW  = allRDV.filter(r => { const d=new Date(r.date); return r.status==='Confirmé' && d>=monday && d<=sunday; }).length;
+        const pending     = allRDV.filter(r => r.status==='En attente').length;
+        const thisMonth   = allRDV.filter(r => { const d=new Date(r.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }).length;
+
+        document.getElementById('stat-today').innerText     = todayRDV;
+        document.getElementById('stat-confirmed').innerText = confirmedW;
+        document.getElementById('stat-pending').innerText   = pending;
+        document.getElementById('stat-total').innerText     = thisMonth;
+    }
+
+    function renderTable(data) {
+        if (!data.length) {
+            document.getElementById('rdv-table-body').innerHTML = '<tr><td colspan="7" class="px-5 py-12 text-center text-slate-300 text-sm not-italic normal-case">Aucun rendez-vous trouvé</td></tr>';
+            return;
+        }
+        const sorted = [...data].sort((a,b) => new Date(a.date+' '+a.time) - new Date(b.date+' '+b.time));
+        document.getElementById('rdv-table-body').innerHTML = sorted.map(r => {
+            const sc = STATUS_STYLES[r.status] || 'bg-slate-100 text-slate-500';
+            const dateLabel = r.date ? new Date(r.date).toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}) : '—';
+            return `<tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors slide-in">
+                <td class="px-5 py-4"><span class="text-[8px] font-black text-slate-400 not-italic">${r.id||'—'}</span></td>
+                <td class="px-5 py-4">
+                    <p class="font-black text-sm text-slate-900 italic uppercase">${r.name||'—'}</p>
+                    <p class="text-[9px] text-slate-400 font-bold not-italic normal-case">${r.phone||''} ${r.email?'· '+r.email:''}</p>
+                </td>
+                <td class="px-5 py-4">
+                    <span class="bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full not-italic">${r.service||'—'}</span>
+                    ${r.model?'<p class="text-[9px] text-slate-400 not-italic normal-case mt-1">'+r.model+'</p>':''}
+                </td>
+                <td class="px-5 py-4">
+                    <p class="font-black text-sm text-slate-900 not-italic">${dateLabel}</p>
+                    <p class="text-[9px] text-slate-400 font-bold not-italic">${r.time||'—'}</p>
+                </td>
+                <td class="px-5 py-4"><span class="font-black text-sm text-slate-700 italic uppercase">${r.store||'—'}</span></td>
+                <td class="px-5 py-4"><span class="${sc} text-[9px] font-black px-2 py-1 rounded-full not-italic">${r.status||'—'}</span></td>
+                <td class="px-5 py-4">
+                    <button onclick="openStatusModal('${r.id||''}','${(r.name||'').replace(/'/g,"\\'")}',this)" class="bg-[#004a99] hover:bg-blue-700 text-white text-[9px] font-black px-3 py-1.5 rounded-lg transition-all not-italic uppercase">STATUT</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filterRDV() {
+        const q = (document.getElementById('search').value||'').toLowerCase();
+        const s = document.getElementById('filterStatus').value;
+        const filtered = allRDV.filter(r => {
+            const matchQ = !q || (r.name||'').toLowerCase().includes(q) || (r.store||'').toLowerCase().includes(q) || (r.service||'').toLowerCase().includes(q);
+            const matchS = !s || r.status === s;
+            return matchQ && matchS;
+        });
+        renderTable(filtered);
+    }
+
+    function setChart(period) {
+        currentChartPeriod = period;
+        document.querySelectorAll('.chart-btn').forEach(b => b.className='chart-btn bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black not-italic uppercase transition-all');
+        document.getElementById(period==='week'?'chartWeek':'chartMonth').className='chart-btn bg-[#004a99] text-white px-3 py-1.5 rounded-lg text-[9px] font-black not-italic uppercase transition-all';
+        renderCharts();
+    }
+
+    function renderCharts() {
+        // ---- Graphique par jour ----
+        const now = new Date();
+        let labels = [], dataPoints = [], dataConfirmed = [];
+
+        if (currentChartPeriod === 'week') {
+            const monday = new Date(now); monday.setDate(now.getDate()-(now.getDay()===0?6:now.getDay()-1));
+            for (let i=0; i<7; i++) {
+                const d = new Date(monday); d.setDate(monday.getDate()+i);
+                const iso = d.toISOString().split('T')[0];
+                labels.push(d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit'}));
+                dataPoints.push(allRDV.filter(r=>r.date===iso).length);
+                dataConfirmed.push(allRDV.filter(r=>r.date===iso&&r.status==='Confirmé').length);
+            }
+        } else {
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+            for (let i=1; i<=daysInMonth; i++) {
+                const iso = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(i).padStart(2,'0');
+                labels.push(String(i));
+                dataPoints.push(allRDV.filter(r=>r.date===iso).length);
+                dataConfirmed.push(allRDV.filter(r=>r.date===iso&&r.status==='Confirmé').length);
+            }
+        }
+
+        if (rdvChart) rdvChart.destroy();
+        rdvChart = new Chart(document.getElementById('rdvChart'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label:'Total RDV', data:dataPoints, backgroundColor:'rgba(0,74,153,0.15)', borderColor:'#004a99', borderWidth:2, borderRadius:6 },
+                    { label:'Confirmés', data:dataConfirmed, backgroundColor:'rgba(16,185,129,0.2)', borderColor:'#10b981', borderWidth:2, borderRadius:6 }
+                ]
+            },
+            options: { responsive:true, plugins:{ legend:{ position:'top', labels:{ font:{family:'Barlow Condensed',weight:'bold'}, boxWidth:12 } } }, scales:{ y:{ beginAtZero:true, ticks:{stepSize:1,font:{family:'Barlow Condensed'}}, grid:{color:'rgba(0,0,0,0.04)'} }, x:{ ticks:{font:{family:'Barlow Condensed',size:10}}, grid:{display:false} } } }
+        });
+
+        // ---- Graphique services ----
+        const services = ['Minor Servicing','Full Servicing','Réparations','First Check-Up'];
+        const serviceColors = ['#004a99','#e67e22','#e74c3c','#10b981'];
+        const serviceCounts = services.map(s => allRDV.filter(r=>r.service===s).length);
+
+        if (serviceChart) serviceChart.destroy();
+        serviceChart = new Chart(document.getElementById('serviceChart'), {
+            type: 'doughnut',
+            data: { labels:services, datasets:[{ data:serviceCounts, backgroundColor:serviceColors, borderWidth:3, borderColor:'#fff' }] },
+            options: { responsive:true, plugins:{ legend:{ display:false } }, cutout:'65%' }
+        });
+
+        // Légende services
+        document.getElementById('service-legend').innerHTML = services.map((s,i) =>
+            `<div class="flex justify-between items-center">
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full" style="background:${serviceColors[i]}"></div><span class="text-[10px] font-black text-slate-600 not-italic">${s}</span></div>
+                <span class="text-[10px] font-black text-slate-900 italic">${serviceCounts[i]}</span>
+            </div>`
+        ).join('');
+    }
+
+    function openStatusModal(id, name) {
+        document.getElementById('modal-rdv-id').value = id;
+        document.getElementById('modal-client').innerText = name;
+        document.getElementById('statusModal').classList.remove('hidden');
+    }
+
+    function closeStatusModal() { document.getElementById('statusModal').classList.add('hidden'); }
+
+    async function setStatus(status) {
+        const id = document.getElementById('modal-rdv-id').value;
+        if (!id) return;
+
+        const payload = { action:'update_rdv_status', id, status };
+        const form = document.createElement('form');
+        form.method='POST'; form.action=SCRIPT_URL; form.target='hidden_iframe_dash'; form.style.display='none';
+        const input = document.createElement('input');
+        input.type='hidden'; input.name='payload'; input.value=JSON.stringify(payload);
+        form.appendChild(input); document.body.appendChild(form); form.submit();
+        setTimeout(() => { if(document.body.contains(form)) document.body.removeChild(form); }, 3000);
+
+        // Mise à jour locale immédiate
+        const rdv = allRDV.find(r=>r.id===id);
+        if (rdv) rdv.status = status;
+        closeStatusModal();
+        updateStats();
+        filterRDV();
+    }
+
+    async function toggleWaitlist() {
+        const panel = document.getElementById('waitlistPanel');
+        if (!panel.classList.contains('hidden')) { panel.classList.add('hidden'); return; }
+        panel.classList.remove('hidden');
+        try {
+            const res  = await fetch(SCRIPT_URL + '?getWaitlist=true');
+            const data = await res.json();
+            const el   = document.getElementById('waitlist-content');
+            if (!data.length) { el.innerHTML='<p class="text-slate-400 text-sm not-italic normal-case text-center py-8">Aucune personne en liste d\'attente</p>'; return; }
+            el.innerHTML = data.map(w => `
+                <div class="flex justify-between items-center py-3 border-b border-slate-100">
+                    <div>
+                        <p class="font-black text-sm text-slate-900 italic uppercase">${w.name}</p>
+                        <p class="text-[10px] text-slate-400 not-italic">${w.phone} · ${w.service} · ${w.store}</p>
+                        <p class="text-[9px] text-slate-300 not-italic">${w.createdAt||''}</p>
+                    </div>
+                    <span class="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-1 rounded-full not-italic uppercase">${w.status||'En attente'}</span>
+                </div>`).join('');
+        } catch(e) { document.getElementById('waitlist-content').innerHTML='<p class="text-red-400 text-sm not-italic normal-case text-center py-8">Erreur de chargement</p>'; }
+    }
+
+    function exportRapport() {
+        if (!allRDV.length) { alert('Aucune donnée à exporter.'); return; }
+        const headers = ['Ref','Nom','Téléphone','Email','Service','Modèle','Date','Heure','Magasin','Statut','Créé le'];
+        const rows    = allRDV.map(r => [r.id,r.name,r.phone,r.email,r.service,r.model,r.date,r.time,r.store,r.status,r.createdAt].map(v=>'"'+(v||'').replace(/"/g,'""')+'"').join(','));
+        const csv     = [headers.join(','),...rows].join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+        a.download = 'rapport_rdv_emcar_' + new Date().toISOString().split('T')[0] + '.csv';
+        a.click();
+    }
+
+    loadRDV();
+    // Auto-refresh toutes les 60 secondes
+    setInterval(loadRDV, 60000);
+</script>
+<iframe name="hidden_iframe_dash" style="display:none"></iframe>
+</body>
+</html>

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prise de RDV — Emcar Sport Atelier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap');
+        body { font-family: 'Barlow Condensed', sans-serif; }
+        .step { display:none; }
+        .step.active { display:block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .progress-bar { transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .service-card { transition: all 0.2s; cursor:pointer; }
+        .service-card:hover { transform: translateY(-3px); }
+        .service-card.selected { border-color: #004a99 !important; background: #eff6ff; }
+        .store-card { transition: all 0.2s; cursor:pointer; }
+        .store-card:hover { transform: translateY(-2px); }
+        .store-card.selected { border-color: #004a99 !important; background: #eff6ff; }
+        input:focus, select:focus, textarea:focus { outline:none; border-color:#004a99; box-shadow: 0 0 0 3px rgba(0,74,153,0.1); }
+        .slot-btn { transition: all 0.15s; cursor:pointer; }
+        .slot-btn:hover:not(.full):not(.selected) { border-color:#004a99; background:#eff6ff; }
+        .slot-btn.selected { background:#004a99; border-color:#004a99; color:white; }
+        .slot-btn.full { background:#f1f5f9; border-color:#e2e8f0; color:#94a3b8; cursor:not-allowed; }
+        .slot-btn.priority { border-color:#e67e22; background:#fff7ed; }
+        .slot-btn.priority.selected { background:#e67e22; border-color:#e67e22; color:white; }
+        .modal-overlay { animation: fadeOverlay 0.2s ease; }
+        @keyframes fadeOverlay { from{opacity:0} to{opacity:1} }
+        .modal-box { animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes popIn { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-[#0a0f18] to-[#1e293b] min-h-screen flex items-center justify-center p-4">
+
+<!-- MODAL DISPONIBILITE -->
+<div id="availModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl modal-box">
+        <div id="avail-icon" class="text-5xl text-center mb-4">⚠️</div>
+        <h3 id="avail-title" class="text-2xl font-black text-slate-900 italic tracking-tighter uppercase text-center mb-3">Créneau indisponible</h3>
+        <p id="avail-msg" class="text-slate-500 text-sm not-italic normal-case text-center mb-6 leading-relaxed"></p>
+        <div id="avail-slots" class="mb-5 hidden">
+            <p class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic mb-3">Créneaux disponibles :</p>
+            <div id="avail-slots-list" class="flex flex-wrap gap-2"></div>
+        </div>
+        <button onclick="closeAvailModal()" class="w-full bg-[#004a99] hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">CHOISIR UNE AUTRE DATE</button>
+    </div>
+</div>
+
+<!-- MODAL LISTE D'ATTENTE -->
+<div id="waitlistModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl modal-box">
+        <div class="text-5xl text-center mb-4">📋</div>
+        <h3 class="text-2xl font-black text-slate-900 italic tracking-tighter uppercase text-center mb-2">Liste d'attente</h3>
+        <p class="text-slate-500 text-sm not-italic normal-case text-center mb-6 leading-relaxed">Tous les créneaux de cette semaine sont complets. Souhaitez-vous être ajouté à la liste d'attente ? Vous serez contacté dès qu'un créneau se libère.</p>
+        <div class="flex gap-3">
+            <button onclick="closeWaitlistModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all text-[11px]">NON</button>
+            <button onclick="joinWaitlist()" class="flex-[2] bg-[#e67e22] hover:bg-orange-600 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg text-[11px]">OUI, M'INSCRIRE</button>
+        </div>
+    </div>
+</div>
+
+    <div class="w-full max-w-lg">
+
+        <!-- LOGO -->
+        <div class="text-center mb-8">
+            <img src="https://raw.githubusercontent.com/cyclingandtrailspecialist-collab/emcar-sport/main/images.png" class="h-14 mx-auto bg-white p-2 rounded-xl shadow-xl object-contain mb-4">
+            <h1 class="text-3xl font-black text-white italic tracking-tighter uppercase">Prise de <span class="text-[#004a99]">RDV</span></h1>
+            <p class="text-slate-400 text-sm not-italic normal-case mt-1">Atelier Emcar Sport — Réservez votre créneau</p>
+        </div>
+
+        <!-- PROGRESS -->
+        <div class="mb-6">
+            <div class="flex justify-between text-[10px] text-slate-400 font-black uppercase not-italic mb-2">
+                <span id="step-label">Étape 1 / 5</span>
+                <span id="step-title">VOS INFORMATIONS</span>
+            </div>
+            <div class="bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div id="progress" class="progress-bar bg-[#004a99] h-full rounded-full" style="width:20%"></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-[2rem] shadow-2xl overflow-hidden">
+
+            <!-- STEP 1 — Infos client + consentement email -->
+            <div class="step active" id="step1">
+                <div class="bg-[#004a99] px-8 py-5">
+                    <p class="text-blue-200 text-[9px] font-black tracking-widest uppercase not-italic">ÉTAPE 1</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">Vos informations</h2>
+                </div>
+                <div class="p-8 space-y-4">
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-1">Nom complet <span class="text-red-400">*</span></label>
+                        <input id="f-name" type="text" placeholder="Votre nom et prénom" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm bg-slate-50 transition-all normal-case not-italic">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-1">Téléphone <span class="text-red-400">*</span></label>
+                        <input id="f-phone" type="tel" placeholder="5XXXXXXX" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm bg-slate-50 transition-all not-italic">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-1">Modèle du vélo</label>
+                        <input id="f-model" type="text" placeholder="Ex: Cannondale Scalpel, Trail 5..." class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm bg-slate-50 transition-all normal-case not-italic">
+                    </div>
+
+                    <!-- CONSENTEMENT EMAIL — Point 6 -->
+                    <div class="bg-blue-50 border-2 border-blue-100 rounded-2xl p-5">
+                        <div class="flex items-start gap-3 mb-4">
+                            <span class="text-2xl mt-0.5">📧</span>
+                            <div>
+                                <p class="font-black text-sm text-slate-900 uppercase italic">Recevoir des notifications par email</p>
+                                <p class="text-[10px] text-slate-500 not-italic normal-case mt-1 leading-relaxed">Nous vous recommandons de fournir votre email pour recevoir : la confirmation de RDV, les mises à jour sur l'avancement de votre vélo, et la notification quand il est prêt.</p>
+                            </div>
+                        </div>
+                        <input id="f-email" type="email" placeholder="votre@email.com (recommandé)" class="w-full border-2 border-blue-100 p-3.5 rounded-xl font-black text-sm bg-white transition-all not-italic normal-case mb-3">
+                        <!-- Consentement RGPD -->
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" id="f-consent" class="w-5 h-5 accent-[#004a99] mt-0.5 flex-shrink-0">
+                            <span class="text-[9px] text-slate-500 not-italic normal-case leading-relaxed">J'accepte que mes données personnelles soient utilisées uniquement pour la gestion de mon rendez-vous et les communications liées à celui-ci, conformément à la politique de protection des données d'Emcar Sport.</span>
+                        </label>
+                    </div>
+
+                    <button onclick="goStep(2)" class="w-full bg-[#004a99] hover:bg-blue-700 text-white py-4 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg mt-2">CONTINUER →</button>
+                </div>
+            </div>
+
+            <!-- STEP 2 — Type de service + tarifs -->
+            <div class="step" id="step2">
+                <div class="bg-[#004a99] px-8 py-5">
+                    <p class="text-blue-200 text-[9px] font-black tracking-widest uppercase not-italic">ÉTAPE 2</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">Type de service</h2>
+                </div>
+                <div class="p-8">
+                    <!-- Tarifs — Point 5 -->
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-5">
+                        <p class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic mb-3">💰 NOS TARIFS</p>
+                        <div class="grid grid-cols-2 gap-2 text-center">
+                            <div class="bg-white rounded-xl p-3 border border-slate-100">
+                                <p class="font-black text-sm text-slate-900 italic uppercase">Minor Servicing</p>
+                                <p class="text-xl font-black text-[#004a99] italic mt-1">Rs 1,300</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-3 border border-slate-100">
+                                <p class="font-black text-sm text-slate-900 italic uppercase">Full Servicing</p>
+                                <p class="text-xl font-black text-[#004a99] italic mt-1">Rs 2,000</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-3 border border-slate-100">
+                                <p class="font-black text-sm text-slate-900 italic uppercase">Réparations</p>
+                                <p class="text-sm font-black text-slate-400 not-italic mt-1">Sur devis</p>
+                            </div>
+                            <div class="bg-white rounded-xl p-3 border border-slate-100">
+                                <p class="font-black text-sm text-slate-900 italic uppercase">First Check-Up</p>
+                                <p class="text-sm font-black text-emerald-500 not-italic mt-1">Gratuit</p>
+                            </div>
+                        </div>
+                        <p class="text-[8px] text-slate-400 not-italic normal-case mt-2 text-center">* Tarifs indicatifs. Pièces détachées non incluses.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <div class="service-card border-2 border-slate-100 rounded-2xl p-4 text-center" onclick="selectService('Minor Servicing')">
+                            <div class="text-3xl mb-2">🔧</div>
+                            <p class="font-black text-sm text-slate-900 uppercase italic">Minor Servicing</p>
+                            <p class="text-[#004a99] font-black text-sm italic mt-1">Rs 1,300</p>
+                            <p class="text-[9px] text-slate-400 not-italic normal-case">Révision standard</p>
+                        </div>
+                        <div class="service-card border-2 border-slate-100 rounded-2xl p-4 text-center" onclick="selectService('Full Servicing')">
+                            <div class="text-3xl mb-2">⚙️</div>
+                            <p class="font-black text-sm text-slate-900 uppercase italic">Full Servicing</p>
+                            <p class="text-[#004a99] font-black text-sm italic mt-1">Rs 2,000</p>
+                            <p class="text-[9px] text-slate-400 not-italic normal-case">Révision complète</p>
+                        </div>
+                        <div class="service-card border-2 border-slate-100 rounded-2xl p-4 text-center" onclick="selectService('Réparations')">
+                            <div class="text-3xl mb-2">🩹</div>
+                            <p class="font-black text-sm text-slate-900 uppercase italic">Réparations</p>
+                            <p class="text-slate-400 font-black text-sm not-italic mt-1">Sur devis</p>
+                            <p class="text-[9px] text-slate-400 not-italic normal-case">Suite à chute/dommage</p>
+                        </div>
+                        <div class="service-card border-2 border-slate-100 rounded-2xl p-4 text-center" onclick="selectService('First Check-Up')">
+                            <div class="text-3xl mb-2">🆕</div>
+                            <p class="font-black text-sm text-slate-900 uppercase italic">First Check-Up</p>
+                            <p class="text-emerald-500 font-black text-sm not-italic mt-1">Gratuit</p>
+                            <p class="text-[9px] text-slate-400 not-italic normal-case">Premier entretien</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="goStep(1)" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">← RETOUR</button>
+                        <button onclick="goStep(3)" class="flex-[2] bg-[#004a99] hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg">CONTINUER →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3 — Magasin -->
+            <div class="step" id="step3">
+                <div class="bg-[#004a99] px-8 py-5">
+                    <p class="text-blue-200 text-[9px] font-black tracking-widest uppercase not-italic">ÉTAPE 3</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">Choix du magasin</h2>
+                </div>
+                <div class="p-8 space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="store-card border-2 border-slate-100 rounded-2xl p-5 text-center" onclick="selectStore('Bell Village')">
+                            <div class="text-3xl mb-2">🏪</div>
+                            <p class="font-black text-sm uppercase italic text-slate-800">Bell Village</p>
+                        </div>
+                        <div class="store-card border-2 border-slate-100 rounded-2xl p-5 text-center" onclick="selectStore('Forbach')">
+                            <div class="text-3xl mb-2">🏪</div>
+                            <p class="font-black text-sm uppercase italic text-slate-800">Forbach</p>
+                        </div>
+                        <div class="store-card border-2 border-slate-100 rounded-2xl p-5 text-center" onclick="selectStore('Flacq')">
+                            <div class="text-3xl mb-2">🏪</div>
+                            <p class="font-black text-sm uppercase italic text-slate-800">Flacq</p>
+                        </div>
+                        <div class="store-card border-2 border-slate-100 rounded-2xl p-5 text-center" onclick="selectStore('Tamarin')">
+                            <div class="text-3xl mb-2">🏪</div>
+                            <p class="font-black text-sm uppercase italic text-slate-800">Tamarin</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="goStep(2)" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">← RETOUR</button>
+                        <button onclick="goStep(4)" class="flex-[2] bg-[#004a99] hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg">CONTINUER →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 4 — Date, heure + vérification disponibilité -->
+            <div class="step" id="step4">
+                <div class="bg-[#004a99] px-8 py-5">
+                    <p class="text-blue-200 text-[9px] font-black tracking-widest uppercase not-italic">ÉTAPE 4</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">Date & Créneau</h2>
+                </div>
+                <div class="p-8 space-y-4">
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-1">Date souhaitée <span class="text-red-400">*</span></label>
+                        <input id="f-date" type="date" onchange="checkAvailability()" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm bg-slate-50 transition-all">
+                    </div>
+
+                    <!-- Indicateur de charge -->
+                    <div id="avail-indicator" class="hidden rounded-xl p-3 border-2 text-sm font-black not-italic">
+                    </div>
+
+                    <!-- Créneaux horaires -->
+                    <div id="time-slots-wrapper">
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-2">Créneau horaire <span class="text-red-400">*</span></label>
+                        <div id="time-slots" class="grid grid-cols-4 gap-2">
+                            <!-- Généré dynamiquement -->
+                        </div>
+                        <div class="flex gap-3 mt-3">
+                            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-slate-100 border border-slate-200"></div><span class="text-[8px] text-slate-400 not-italic">Disponible</span></div>
+                            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-[#004a99]"></div><span class="text-[8px] text-slate-400 not-italic">Sélectionné</span></div>
+                            <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-slate-200"></div><span class="text-[8px] text-slate-400 not-italic">Complet</span></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 tracking-widest uppercase not-italic block mb-1">Notes / Commentaires</label>
+                        <textarea id="f-notes" placeholder="Décrivez le problème, accessoires à apporter..." class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black text-sm bg-slate-50 h-20 resize-none transition-all not-italic normal-case placeholder:text-slate-300"></textarea>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button onclick="goStep(3)" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">← RETOUR</button>
+                        <button onclick="goStep(5)" class="flex-[2] bg-[#004a99] hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg">CONTINUER →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 5 — Récapitulatif & confirmation -->
+            <div class="step" id="step5">
+                <div class="bg-[#004a99] px-8 py-5">
+                    <p class="text-blue-200 text-[9px] font-black tracking-widest uppercase not-italic">ÉTAPE 5</p>
+                    <h2 class="text-2xl font-black text-white italic tracking-tighter uppercase">Confirmation</h2>
+                </div>
+                <div class="p-8">
+                    <div id="recap" class="bg-slate-50 rounded-2xl p-5 mb-5 space-y-3 border border-slate-100"></div>
+                    <!-- Tarif estimé -->
+                    <div id="tarif-block" class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-5">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[9px] font-black text-blue-400 tracking-widest uppercase not-italic">TARIF ESTIMÉ</span>
+                            <span id="tarif-display" class="text-xl font-black text-[#004a99] italic">—</span>
+                        </div>
+                        <p class="text-[8px] text-slate-400 not-italic normal-case mt-1">* Pièces détachées non incluses. Devis fourni après diagnostic.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="goStep(4)" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">← RETOUR</button>
+                        <button onclick="submitRDV()" id="submitBtn" class="flex-[2] bg-[#004a99] hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg">✅ CONFIRMER</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 6 — Succès -->
+            <div class="step" id="step6">
+                <div class="p-12 text-center">
+                    <div class="text-7xl mb-5">✅</div>
+                    <h2 class="text-3xl font-black text-slate-900 italic tracking-tighter uppercase mb-2">RDV Enregistré !</h2>
+                    <p id="success-email-msg" class="text-slate-500 not-italic normal-case text-sm mb-2"></p>
+                    <p class="text-slate-400 not-italic normal-case text-xs mb-8">Notre équipe vous contactera pour confirmer votre créneau.</p>
+                    <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
+                        <p class="text-[9px] font-black text-blue-400 tracking-widest uppercase not-italic">Référence</p>
+                        <p id="ref-display" class="text-xl font-black text-[#004a99] italic">RDV-XXXX</p>
+                    </div>
+                    <div class="bg-yellow-50 border border-yellow-100 rounded-2xl p-4 mb-6 text-left">
+                        <p class="text-[9px] font-black text-yellow-600 tracking-widest uppercase not-italic mb-1">📌 À noter</p>
+                        <p class="text-[10px] text-slate-600 not-italic normal-case leading-relaxed">Merci d'apporter votre vélo au magasin à l'heure indiquée. Pensez à informer notre équipe de tout problème spécifique.</p>
+                    </div>
+                    <button onclick="location.reload()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">NOUVEAU RDV</button>
+                </div>
+            </div>
+
+            <!-- STEP LISTE ATTENTE -->
+            <div class="step" id="step-wait">
+                <div class="p-12 text-center">
+                    <div class="text-7xl mb-5">📋</div>
+                    <h2 class="text-3xl font-black text-slate-900 italic tracking-tighter uppercase mb-2">Liste d'attente !</h2>
+                    <p class="text-slate-500 not-italic normal-case text-sm mb-2">Vous êtes inscrit sur la liste d'attente.</p>
+                    <p class="text-slate-400 not-italic normal-case text-xs mb-6">Nous vous contacterons dès qu'un créneau se libère.</p>
+                    <div class="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-6">
+                        <p id="wait-ref" class="text-xl font-black text-[#e67e22] italic">WAIT-XXXX</p>
+                    </div>
+                    <button onclick="location.reload()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3.5 rounded-2xl font-black uppercase italic tracking-widest transition-all">RETOUR ACCUEIL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrpGb7CVA4SFYGw2iGEQaacD1DWueysMg7Tgjm15g_bPY6J-Zh_pFA8Vha3aFi7a-F/exec";
+
+    let selectedService = '', selectedStore = '', selectedTime = '';
+    let currentStep = 1;
+    let existingRDV  = []; // RDV déjà enregistrés pour vérification dispo
+
+    // Quotas par jour
+    const QUOTA_SERVICING = 5;
+    const QUOTA_MONTAGE   = 3;
+
+    // Vélos prioritaires (pas de quota pour eux)
+    const PRIORITY_MODELS = ['scalpel','supersix','super six'];
+
+    const TARIFS = { 'Minor Servicing':'Rs 1,300', 'Full Servicing':'Rs 2,000', 'Réparations':'Sur devis', 'First Check-Up':'Gratuit' };
+
+    const STEPS_META = {
+        1:{label:'Étape 1 / 5',title:'VOS INFORMATIONS',progress:20},
+        2:{label:'Étape 2 / 5',title:'TYPE DE SERVICE',progress:40},
+        3:{label:'Étape 3 / 5',title:'MAGASIN',progress:60},
+        4:{label:'Étape 4 / 5',title:'DATE & CRÉNEAU',progress:80},
+        5:{label:'Étape 5 / 5',title:'CONFIRMATION',progress:100}
+    };
+
+    const TIME_SLOTS = ['08:30','09:00','09:30','10:00','10:30','11:00','11:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
+
+    // Date min = demain
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+    document.getElementById('f-date').min = tomorrow.toISOString().split('T')[0];
+    document.getElementById('f-date').value = tomorrow.toISOString().split('T')[0];
+
+    // Charger les RDV existants au démarrage
+    async function loadExistingRDV() {
+        try {
+            const res = await fetch(SCRIPT_URL + '?getRDV=true');
+            existingRDV = await res.json();
+        } catch(e) { existingRDV = []; }
+    }
+    loadExistingRDV();
+
+    function isPriorityBike() {
+        const model = (document.getElementById('f-model').value || '').toLowerCase();
+        return PRIORITY_MODELS.some(p => model.includes(p));
+    }
+
+    function getDateLoad(date) {
+        const rdvOnDate = existingRDV.filter(r => r.date === date && r.status !== 'Annulé');
+        const servCount = rdvOnDate.filter(r => r.service !== 'Montage').length;
+        const montCount = rdvOnDate.filter(r => r.service === 'Montage').length;
+        return { servicing: servCount, montage: montCount, rdvOnDate };
+    }
+
+    function getSlotLoad(date, time) {
+        return existingRDV.filter(r => r.date === date && r.time === time && r.status !== 'Annulé').length;
+    }
+
+    async function checkAvailability() {
+        const date = document.getElementById('f-date').value;
+        if (!date) return;
+        renderTimeSlots(date);
+
+        const { servicing, montage } = getDateLoad(date);
+        const priority = isPriorityBike();
+        const indicator = document.getElementById('avail-indicator');
+        indicator.classList.remove('hidden');
+
+        const isServFull = !priority && servicing >= QUOTA_SERVICING;
+        const isMontFull = !priority && montage  >= QUOTA_MONTAGE;
+        const allFull    = isServFull && isMontFull;
+
+        if (priority) {
+            indicator.className = 'rounded-xl p-3 border-2 border-orange-200 bg-orange-50 text-sm font-black not-italic';
+            indicator.innerHTML = '<span class="text-orange-600">⭐ Vélo prioritaire détecté — créneau garanti disponible</span>';
+        } else if (allFull) {
+            indicator.className = 'rounded-xl p-3 border-2 border-red-200 bg-red-50 text-sm font-black not-italic';
+            indicator.innerHTML = '<span class="text-red-600">⛔ Cette date est complète ('+servicing+'/'+QUOTA_SERVICING+' servicing · '+montage+'/'+QUOTA_MONTAGE+' montage)</span>';
+            showAvailModal(date);
+        } else if (isServFull || isMontFull) {
+            indicator.className = 'rounded-xl p-3 border-2 border-yellow-200 bg-yellow-50 text-sm font-black not-italic';
+            indicator.innerHTML = '<span class="text-yellow-700">⚠️ Capacité partielle — '+servicing+'/'+QUOTA_SERVICING+' servicing · '+montage+'/'+QUOTA_MONTAGE+' montage</span>';
+        } else {
+            const total = servicing + montage;
+            const color = total >= 6 ? 'orange' : total >= 3 ? 'yellow' : 'emerald';
+            const colorMap = {orange:'border-orange-200 bg-orange-50 text-orange-600', yellow:'border-yellow-200 bg-yellow-50 text-yellow-700', emerald:'border-emerald-200 bg-emerald-50 text-emerald-700'};
+            indicator.className = 'rounded-xl p-3 border-2 '+colorMap[color]+' text-sm font-black not-italic';
+            indicator.innerHTML = '<span>✅ Disponible — '+servicing+'/'+QUOTA_SERVICING+' servicing · '+montage+'/'+QUOTA_MONTAGE+' montage</span>';
+        }
+    }
+
+    function renderTimeSlots(date) {
+        const wrapper = document.getElementById('time-slots');
+        wrapper.innerHTML = '';
+        selectedTime = '';
+        TIME_SLOTS.forEach(t => {
+            const slotLoad  = getSlotLoad(date, t);
+            const isFull    = !isPriorityBike() && slotLoad >= 2;
+            const priority  = isPriorityBike();
+            const btn = document.createElement('button');
+            btn.className = 'slot-btn border-2 border-slate-100 rounded-xl py-2.5 text-[11px] font-black not-italic uppercase text-slate-700' + (isFull?' full':'') + (priority&&!isFull?' priority':'');
+            btn.innerText = t;
+            if (!isFull) {
+                btn.onclick = function() {
+                    document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedTime = t;
+                };
+            } else {
+                btn.title = 'Créneau complet';
+                btn.innerHTML = t + '<br><span style="font-size:8px;opacity:0.6">COMPLET</span>';
+            }
+            wrapper.appendChild(btn);
+        });
+    }
+
+    function showAvailModal(date) {
+        // Trouver prochaines dates disponibles
+        const suggestions = [];
+        for (let i=1; i<=14 && suggestions.length<3; i++) {
+            const d = new Date(date); d.setDate(d.getDate()+i);
+            const iso = d.toISOString().split('T')[0];
+            const {servicing, montage} = getDateLoad(iso);
+            if (servicing < QUOTA_SERVICING || montage < QUOTA_MONTAGE) {
+                suggestions.push({ date:iso, label:d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}), serv:servicing, mont:montage });
+            }
+        }
+        document.getElementById('avail-title').innerText  = 'Date indisponible';
+        document.getElementById('avail-icon').innerText   = '⛔';
+        document.getElementById('avail-msg').innerText    = 'Cette date a atteint sa capacité maximale ('+QUOTA_SERVICING+' servicing / '+QUOTA_MONTAGE+' montage). Veuillez choisir une autre date ou s\'inscrire sur la liste d\'attente.';
+        const slotsDiv = document.getElementById('avail-slots');
+        const slotsList = document.getElementById('avail-slots-list');
+        if (suggestions.length) {
+            slotsDiv.classList.remove('hidden');
+            slotsList.innerHTML = suggestions.map(s =>
+                '<button onclick="pickSuggestedDate(\''+s.date+'\')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-black px-3 py-1.5 rounded-lg not-italic uppercase transition-all">'+s.label+'</button>'
+            ).join('');
+        }
+        document.getElementById('availModal').classList.remove('hidden');
+    }
+
+    function pickSuggestedDate(date) {
+        document.getElementById('f-date').value = date;
+        closeAvailModal();
+        checkAvailability();
+    }
+
+    function closeAvailModal() { document.getElementById('availModal').classList.add('hidden'); }
+    function closeWaitlistModal() { document.getElementById('waitlistModal').classList.add('hidden'); }
+
+    function showWaitlistModal() { document.getElementById('waitlistModal').classList.remove('hidden'); }
+
+    async function joinWaitlist() {
+        closeWaitlistModal();
+        const payload = {
+            action: 'add_waitlist',
+            rdv: {
+                name:    document.getElementById('f-name').value,
+                phone:   document.getElementById('f-phone').value,
+                email:   document.getElementById('f-email').value,
+                model:   document.getElementById('f-model').value,
+                service: selectedService,
+                store:   selectedStore,
+                notes:   document.getElementById('f-notes').value || ''
+            }
+        };
+        submitForm(payload);
+        document.getElementById('step'+currentStep).classList.remove('active');
+        document.getElementById('step-wait').classList.add('active');
+        document.getElementById('wait-ref').innerText = 'WAIT-' + Date.now().toString().slice(-6);
+    }
+
+    function goStep(n) {
+        if (n === 2 && !validateStep1()) return;
+        if (n === 3 && !validateStep2()) return;
+        if (n === 4 && !validateStep3()) return;
+        if (n === 5 && !validateStep4()) return;
+        if (n === 5) buildRecap();
+        const current = currentStep <= 5 ? 'step'+currentStep : 'step'+currentStep;
+        document.getElementById('step'+currentStep).classList.remove('active');
+        document.getElementById('step'+n).classList.add('active');
+        currentStep = n;
+        if (STEPS_META[n]) {
+            document.getElementById('step-label').innerText  = STEPS_META[n].label;
+            document.getElementById('step-title').innerText  = STEPS_META[n].title;
+            document.getElementById('progress').style.width  = STEPS_META[n].progress + '%';
+        }
+        window.scrollTo(0,0);
+    }
+
+    function validateStep1() {
+        if (!document.getElementById('f-name').value.trim())  { alert('Veuillez entrer votre nom.'); return false; }
+        if (!document.getElementById('f-phone').value.trim()) { alert('Veuillez entrer votre téléphone.'); return false; }
+        const email = document.getElementById('f-email').value.trim();
+        const consent = document.getElementById('f-consent').checked;
+        if (email && !email.includes('@')) { alert('Veuillez entrer un email valide.'); return false; }
+        if (email && !consent) { alert('Veuillez accepter la politique de protection des données pour recevoir des notifications.'); return false; }
+        return true;
+    }
+
+    function validateStep2() {
+        if (!selectedService) { alert('Veuillez choisir un type de service.'); return false; }
+        return true;
+    }
+
+    function validateStep3() {
+        if (!selectedStore) { alert('Veuillez choisir un magasin.'); return false; }
+        return true;
+    }
+
+    function validateStep4() {
+        if (!document.getElementById('f-date').value) { alert('Veuillez choisir une date.'); return false; }
+        if (!selectedTime) { alert('Veuillez choisir un créneau horaire.'); return false; }
+        const date = document.getElementById('f-date').value;
+        const {servicing, montage} = getDateLoad(date);
+        const priority = isPriorityBike();
+        if (!priority && servicing >= QUOTA_SERVICING && montage >= QUOTA_MONTAGE) {
+            showWaitlistModal();
+            return false;
+        }
+        return true;
+    }
+
+    function selectService(s) {
+        selectedService = s;
+        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+    }
+
+    function selectStore(s) {
+        selectedStore = s;
+        document.querySelectorAll('.store-card').forEach(c => c.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+    }
+
+    function buildRecap() {
+        document.getElementById('recap').innerHTML = `
+            <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Client</span><span class="font-black text-sm text-slate-800 italic uppercase">${document.getElementById('f-name').value}</span></div>
+            <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Téléphone</span><span class="font-black text-sm text-slate-800 not-italic">${document.getElementById('f-phone').value}</span></div>
+            ${document.getElementById('f-email').value?'<div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Email</span><span class="font-black text-sm text-slate-800 not-italic normal-case">'+document.getElementById('f-email').value+'</span></div>':''}
+            <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Vélo</span><span class="font-black text-sm text-slate-800 italic uppercase">${document.getElementById('f-model').value||'Non précisé'}</span></div>
+            <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Service</span><span class="font-black text-sm text-[#004a99] italic uppercase">${selectedService}</span></div>
+            <div class="flex justify-between py-2 border-b border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Date</span><span class="font-black text-sm text-slate-800 not-italic">${document.getElementById('f-date').value} à ${selectedTime}</span></div>
+            <div class="flex justify-between py-2"><span class="text-[9px] font-black text-slate-400 uppercase not-italic">Magasin</span><span class="font-black text-sm text-slate-800 italic uppercase">${selectedStore}</span></div>`;
+        document.getElementById('tarif-display').innerText = TARIFS[selectedService] || '—';
+    }
+
+    function submitForm(payload) {
+        const form = document.createElement('form');
+        form.method='POST'; form.action=SCRIPT_URL; form.target='hidden_iframe'; form.style.display='none';
+        const input = document.createElement('input');
+        input.type='hidden'; input.name='payload'; input.value=JSON.stringify(payload);
+        form.appendChild(input); document.body.appendChild(form); form.submit();
+        setTimeout(() => { if(document.body.contains(form)) document.body.removeChild(form); }, 3000);
+    }
+
+    async function submitRDV() {
+        const btn = document.getElementById('submitBtn');
+        btn.innerText='⏳ ENVOI...'; btn.disabled=true;
+        const payload = {
+            action: 'add_rdv',
+            rdv: {
+                name:    document.getElementById('f-name').value,
+                phone:   document.getElementById('f-phone').value,
+                email:   document.getElementById('f-email').value,
+                model:   document.getElementById('f-model').value,
+                service: selectedService,
+                date:    document.getElementById('f-date').value,
+                time:    selectedTime,
+                store:   selectedStore,
+                notes:   document.getElementById('f-notes').value,
+                consent: document.getElementById('f-consent').checked
+            }
+        };
+        submitForm(payload);
+        const email = document.getElementById('f-email').value;
+        document.getElementById('step5').classList.remove('active');
+        document.getElementById('step6').classList.add('active');
+        document.getElementById('ref-display').innerText = 'RDV-' + Date.now().toString().slice(-6);
+        document.getElementById('success-email-msg').innerText = email ? 'Un email de confirmation a été envoyé à '+email+'.' : 'Aucun email fourni — notre équipe vous contactera par téléphone.';
+        document.getElementById('step-label').innerText='Terminé !';
+        document.getElementById('step-title').innerText='RDV ENREGISTRÉ';
+        document.getElementById('progress').style.width='100%';
+        document.getElementById('progress').className='progress-bar bg-emerald-500 h-full rounded-full';
+    }
+</script>
+<iframe name="hidden_iframe" style="display:none"></iframe>
+</body>
+</html>
