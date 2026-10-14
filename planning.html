@@ -82,6 +82,7 @@
                 <button onclick="closeModal()" class="text-3xl text-slate-300 font-bold hover:text-red-500">×</button>
             </div>
             <input type="hidden" id="f_id">
+            <input type="hidden" id="f_fbid">
             <div class="grid grid-cols-2 gap-5">
                 <div class="col-span-2">
                     <label class="text-slate-500 text-[9px] mb-1 block font-black uppercase tracking-widest">Client / Magasin</label>
@@ -173,540 +174,311 @@
     </div>
     <div id="rapportBackdrop" onclick="closeRapport()" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-[2900]"></div>
 
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp }     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy }
+                                     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        const app = initializeApp({
+            apiKey: "AIzaSyByrc6HeltR4yn-js9FZJUn6U3F9R8aKfE",
+            authDomain: "emcar-planning-console.firebaseapp.com",
+            projectId: "emcar-planning-console",
+            storageBucket: "emcar-planning-console.firebasestorage.app",
+            messagingSenderId: "486766039417",
+            appId: "1:486766039417:web:54cfbc4e53c418f8b9dfa8"
+        });
+        const db = getFirestore(app);
+        window._db = db;
+        window._col = (n) => collection(db, n);
+        window._getDocs = getDocs;
+        window._addDoc = addDoc;
+        window._updateDoc = updateDoc;
+        window._deleteDoc = deleteDoc;
+        window._doc = (n, id) => doc(db, n, id);
+        window._query = query;
+        window._orderBy = orderBy;
+        document.dispatchEvent(new Event('firebaseReady'));
+    </script>
+
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrpGb7CVA4SFYGw2iGEQaacD1DWueysMg7Tgjm15g_bPY6J-Zh_pFA8Vha3aFi7a-F/exec";
-        let localData = [];
-        let rapportData = []; // données fusionnées Tasks + Servicing_Requests
-        let currentPeriod = 'week';
+        let localData = [], rapportData = [], currentPeriod = 'week', weekOffset = 0;
 
         const STATUS_OPTIONS = {
-            'Servicing': ["A faire", "Diagnostic", "En attente de Devis", "Validation de Devis", "En cours", "Pieces Manquantes", "Terminé"],
-            'Montage': ["A faire", "En cours", "Terminé"]
+            'Servicing': ["A faire","Diagnostic","En attente de Devis","Validation de Devis","En cours","Pieces Manquantes","Terminé"],
+            'Montage':   ["A faire","En cours","Terminé"]
         };
 
-        function formatDateISO(dInput) {
-            const d = new Date(dInput);
-            if (isNaN(d)) return '';
-            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        document.addEventListener('firebaseReady', () => { buildCalendar(); load(); });
+
+        function formatDateISO(d) {
+            if (!d) return '';
+            const dt = new Date(d);
+            if (isNaN(dt)) return '';
+            return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
         }
 
-        function formatDateFR(iso) {
-            const d = new Date(iso);
-            if (isNaN(d)) return iso;
-            return d.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-        }
+        function isTermine(s) { return (s||'').toLowerCase().replace(/[éè]/g,'e').trim() === 'termine'; }
 
-        // ---- CALENDAR (identique à l'original) ----
-        let weekOffset = 0; // 0 = semaine actuelle, -1 = semaine précédente, etc.
-
-        function getMondayOfWeek(offset) {
-            const today = new Date();
-            const diff = today.getDay() === 0 ? -6 : 1 - today.getDay();
-            const monday = new Date(today);
-            monday.setDate(today.getDate() + diff + (offset * 7));
-            monday.setHours(0,0,0,0);
-            return monday;
+        // ---- WEEK ----
+        function getMondayOfWeek(off) {
+            const t = new Date(), diff = t.getDay()===0?-6:1-t.getDay(), m = new Date(t);
+            m.setDate(t.getDate()+diff+(off*7)); m.setHours(0,0,0,0); return m;
         }
 
         function updateWeekLabel() {
-            const monday = getMondayOfWeek(weekOffset);
-            const sunday = new Date(monday); sunday.setDate(monday.getDate() + 5);
-            const label = monday.toLocaleDateString('fr-FR', {day:'2-digit', month:'short'}) +
-                          ' — ' +
-                          sunday.toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
-            document.getElementById('weekLabel').innerText = label;
-            const todayBtn = document.getElementById('todayBtn');
-            if (weekOffset !== 0) todayBtn.classList.remove('hidden');
-            else todayBtn.classList.add('hidden');
+            const m = getMondayOfWeek(weekOffset), s = new Date(m);
+            s.setDate(m.getDate()+5);
+            document.getElementById('weekLabel').innerText = m.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}) + ' — ' + s.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+            weekOffset !== 0 ? document.getElementById('todayBtn').classList.remove('hidden') : document.getElementById('todayBtn').classList.add('hidden');
         }
 
-        function changeWeek(dir) {
-            weekOffset += dir;
-            buildCalendar();
-            load();
-        }
-
-        function goToCurrentWeek() {
-            weekOffset = 0;
-            buildCalendar();
-            load();
-        }
+        function changeWeek(dir) { weekOffset += dir; buildCalendar(); load(); }
+        function goToCurrentWeek() { weekOffset = 0; buildCalendar(); load(); }
 
         function buildCalendar() {
-            const grid = document.getElementById('calendarGrid');
-            grid.innerHTML = '';
-            const today = new Date();
-            const monday = getMondayOfWeek(weekOffset);
-            updateWeekLabel();
-
-            for(let i = 0; i < 6; i++) {
-                let d = new Date(monday); d.setDate(monday.getDate() + i);
-                const iso = formatDateISO(d);
-                const isToday = d.toDateString() === today.toDateString();
-                const isPast = d < today && !isToday;
-                grid.innerHTML += `
-                    <div class="flex-1 min-w-[260px] flex flex-col">
-                        <div class="bg-white px-4 pt-4 pb-3 rounded-t-2xl shadow-sm border-b-4 ${isToday ? 'border-[#004a99]' : isPast ? 'border-slate-300' : 'border-slate-100'}">
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <p class="${isToday ? 'text-[#004a99]' : isPast ? 'text-slate-400' : 'text-slate-700'} text-xl font-black uppercase leading-none">${d.toLocaleDateString('fr-FR', { weekday: 'long' })}</p>
-                                    <p class="text-[9px] text-slate-400 font-bold tracking-widest mt-1">${d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' })}</p>
-                                </div>
-                                ${isToday ? '<span class="bg-[#004a99] text-white text-[8px] font-black px-2 py-0.5 rounded-full not-italic tracking-widest">AUJOURD\'HUI</span>' : ''}
-                                ${isPast && weekOffset !== 0 ? '<span class="text-[8px] text-slate-300 font-black not-italic">PASSÉ</span>' : ''}
+            const grid = document.getElementById('calendarGrid'), today = new Date(), monday = getMondayOfWeek(weekOffset);
+            grid.innerHTML = ''; updateWeekLabel();
+            for (let i=0; i<6; i++) {
+                const d = new Date(monday); d.setDate(monday.getDate()+i);
+                const iso = formatDateISO(d), isToday = d.toDateString()===today.toDateString(), isPast = d < today && !isToday;
+                grid.innerHTML += `<div class="flex-1 min-w-[260px] flex flex-col">
+                    <div class="bg-white px-4 pt-4 pb-3 rounded-t-2xl shadow-sm border-b-4 ${isToday?'border-[#004a99]':isPast?'border-slate-300':'border-slate-100'}">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="${isToday?'text-[#004a99]':isPast?'text-slate-400':'text-slate-700'} text-xl font-black uppercase leading-none">${d.toLocaleDateString('fr-FR',{weekday:'long'})}</p>
+                                <p class="text-[9px] text-slate-400 font-bold tracking-widest mt-1">${d.toLocaleDateString('fr-FR',{day:'2-digit',month:'long'})}</p>
                             </div>
-                            <div class="flex items-center gap-2 mt-2">
-                                <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                    <div id="load-bar-${iso}" class="bg-[#004a99] h-full transition-all" style="width:0%"></div>
-                                </div>
-                                <span id="load-text-${iso}" class="text-[9px] font-black text-slate-400 whitespace-nowrap">0H / 8H</span>
-                            </div>
+                            ${isToday?'<span class="bg-[#004a99] text-white text-[8px] font-black px-2 py-0.5 rounded-full">AUJOURD\'HUI</span>':''}
+                            ${isPast&&weekOffset!==0?'<span class="text-[8px] text-slate-300 font-black">PASSÉ</span>':''}
                         </div>
-                        <div id="col-${iso}" class="flex-1 ${isPast ? 'bg-slate-100/80' : 'bg-slate-50'} p-3 space-y-3 rounded-b-2xl overflow-y-auto"></div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div id="load-bar-${iso}" class="bg-[#004a99] h-full transition-all" style="width:0%"></div></div>
+                            <span id="load-text-${iso}" class="text-[9px] font-black text-slate-400 whitespace-nowrap">0H / 8H</span>
+                        </div>
                     </div>
-                `;
+                    <div id="col-${iso}" class="${isToday?'bg-blue-50/40':'bg-slate-50'} flex-1 p-3 space-y-3 rounded-b-2xl overflow-y-auto min-h-[400px]"></div>
+                </div>`;
             }
         }
 
         function calculateTime(t) {
-            const details = (t.details || "").toUpperCase();
-            const name    = (t.name    || "").toUpperCase();
-            const notes   = (t.notes   || t.comment || "").toUpperCase();
-            const allText = details + " " + name + " " + notes;
-
-            // Full Day si Outdoor ou On-site (480 min = 8h)
-            if (allText.includes("OUTDOOR") || allText.includes("ON-SITE") || allText.includes("ONSITE")) return 480;
-
-            if (t.type === "Servicing") {
-                if (t.servType === "Minor Servicing") return 35;
-                if (t.servType === "Full Servicing") return 75;
-                if (t.servType === "Réparations" || t.servType === "Reparations") {
-                    if (details.includes("SCALPEL") || details.includes("SUPERSIX") || details.includes("SYNAPSE")) return 75;
-                    return 60;
-                }
+            const all = ((t.details||t.model||'')+(t.name||'')+(t.notes||t.comment||'')).toUpperCase();
+            if (all.includes('OUTDOOR')||all.includes('ON-SITE')||all.includes('ONSITE')) return 480;
+            if (t.type==='Servicing') {
+                if (t.servType==='Minor Servicing') return 35;
+                if (t.servType==='Full Servicing')  return 75;
+                if ((t.servType||'').includes('paration')) return all.includes('SCALPEL')||all.includes('SUPERSIX')?75:60;
                 return 30;
             }
-            if (t.type === "Montage") {
-                if (details.includes("SCALPEL")) return 150;
-                if (details.includes("SUPERSIX")) return 120;
-                if (details.includes("SYNAPSE")) return 75;
-                const kidSizes = ["12\"", "14\"", "16\"", "20\"", "24\"", "26\""];
-                if (kidSizes.some(s => details.includes(s))) return 35;
-                if (details.includes("QUICK CX") || details.includes("TREADWELL") || details.includes("TRAIL")) return 60;
+            if (t.type==='Montage') {
+                if (all.includes('SCALPEL')) return 150;
+                if (all.includes('SUPERSIX')) return 120;
+                if (all.includes('SYNAPSE'))  return 75;
                 return 60;
             }
             return 0;
         }
 
-        function isTermine(status) {
-            // Gère "Terminé" avec accent ET "Termine" sans accent
-            return (status || "").toLowerCase().replace(/[éè]/g, "e").trim() === "termine";
-        }
-
+        // ---- FIREBASE LOAD ----
         async function load() {
+            if (!window._db) return;
             try {
-                const res = await fetch(SCRIPT_URL + "?getTasks=true");
-                localData = await res.json();
-                const dailyLoad = {};
-
-                localData.forEach(t => {
-                    const taskDate = formatDateISO(t.date);
-                    const col = document.getElementById('col-' + taskDate);
-                    const done = isTermine(t.status);
-                    // Semaine actuelle : cacher les Terminé / Semaines passées : tout afficher
-                    if (col && !(weekOffset === 0 && done)) {
-                        const time = calculateTime(t);
-                        if (!done) dailyLoad[taskDate] = (dailyLoad[taskDate] || 0) + time;
-                        const card = document.createElement('div');
-                        card.className = "bg-white p-5 rounded-2xl shadow-md border-l-[10px] cursor-pointer hover:-translate-y-1 transition-all "
-                            + (t.type === 'Servicing' ? 'border-[#004a99]' : 'border-[#e67e22]')
-                            + (done ? ' opacity-50 grayscale' : '');
-                        card.onclick = () => editTask(t.id);
-
-                        // Badge spécial Full Day
-                        const isFullDay = time === 480;
-                        const timeLabel = isFullDay ? 'FULL DAY' : time + ' MIN';
-                        const timeColor = isFullDay ? 'text-purple-600' : (t.type === 'Servicing' ? 'text-blue-600' : 'text-orange-600');
-
-                        card.innerHTML =
-                            '<div class="flex justify-between items-center mb-2">' +
-                                '<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[8px] font-bold">' + t.id + '</span>' +
-                                '<span class="' + timeColor + ' text-[8px] font-black tracking-widest">' + timeLabel + '</span>' +
-                            '</div>' +
-                            (t.details ? '<p class="text-[11px] text-slate-900 font-black mb-1 leading-tight">' + t.details + '</p>' : '') +
-                            '<p class="text-slate-500 text-[10px] mb-3 leading-tight">' + (t.name || '') + '</p>' +
-                            '<div class="flex items-center gap-2">' +
-                                '<div class="w-2 h-2 rounded-full ' + (t.status === 'En cours' ? 'bg-green-500 animate-pulse' : done ? 'bg-emerald-400' : 'bg-slate-300') + '"></div>' +
-                                '<span class="text-slate-800 font-black text-[9px] tracking-wider">' + t.status + '</span>' +
-                            '</div>';
-                        col.appendChild(card);
-                    }
-                });
-
-                Object.keys(dailyLoad).forEach(date => {
-                    const totalMin = dailyLoad[date];
-                    const percent = Math.min((totalMin / 480) * 100, 100);
-                    const bar = document.getElementById('load-bar-' + date);
-                    const text = document.getElementById('load-text-' + date);
-                    if(bar) {
-                        bar.style.width = percent + "%";
-                        if(percent >= 100) bar.className = "bg-purple-600 h-full transition-all";
-                        else if(percent > 85) bar.className = "bg-red-500 h-full transition-all";
-                        else if(percent > 65) bar.className = "bg-orange-500 h-full transition-all";
-                        else bar.className = "bg-[#004a99] h-full transition-all";
-                    }
-                    if(text) {
-                        const label = totalMin >= 480 ? 'FULL DAY' : (totalMin/60).toFixed(1) + 'H / 8H';
-                        text.innerText = label;
-                    }
-                });
-            } catch(e) { console.error(e); }
+                document.querySelectorAll('[id^="col-"]').forEach(c => c.innerHTML='');
+                const snap = await window._getDocs(window._col('tasks'));
+                localData = [];
+                snap.forEach(d => localData.push({ id: d.id, ...d.data() }));
+                renderCards();
+            } catch(e) { console.error('Load:', e); }
         }
 
+        function renderCards() {
+            document.querySelectorAll('[id^="col-"]').forEach(c => c.innerHTML='');
+            const dailyLoad = {};
+            localData.forEach(t => {
+                const taskDate = formatDateISO(t.date), col = document.getElementById('col-'+taskDate), done = isTermine(t.status);
+                if (col && !(weekOffset===0 && done)) {
+                    const time = calculateTime(t);
+                    if (!done) dailyLoad[taskDate] = (dailyLoad[taskDate]||0) + time;
+                    const isFullDay = time===480, timeLabel = isFullDay?'FULL DAY':time+' MIN';
+                    const timeColor = isFullDay?'text-purple-600':t.type==='Servicing'?'text-blue-600':'text-orange-600';
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-5 rounded-2xl shadow-md border-l-[10px] cursor-pointer hover:-translate-y-1 transition-all '+(t.type==='Servicing'?'border-[#004a99]':'border-[#e67e22]')+(done?' opacity-50 grayscale':'');
+                    card.onclick = () => editTask(t.id);
+                    card.innerHTML =
+                        '<div class="flex justify-between items-center mb-2">'+
+                            '<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[8px] font-bold">'+(t.id||'').substring(0,8)+'</span>'+
+                            '<span class="'+timeColor+' text-[8px] font-black tracking-widest">'+timeLabel+'</span>'+
+                        '</div>'+
+                        (t.details||t.model?'<p class="text-[11px] text-slate-900 font-black mb-1 leading-tight">'+(t.details||t.model)+'</p>':'')+
+                        '<p class="text-slate-500 text-[10px] mb-3 leading-tight">'+(t.name||t.client||'')+'</p>'+
+                        '<div class="flex items-center justify-between">'+
+                            '<div class="flex items-center gap-2">'+
+                                '<div class="w-2 h-2 rounded-full '+(t.status==='En cours'?'bg-green-500 animate-pulse':done?'bg-emerald-400':'bg-slate-300')+'"></div>'+
+                                '<span class="text-slate-800 font-black text-[9px] tracking-wider">'+(t.status||'')+'</span>'+
+                            '</div>'+
+                            '<button onclick="openJobCard(event,\''+encodeURIComponent(t.name||t.client||'')+'\',\''+encodeURIComponent(t.phone||'')+'\',\''+encodeURIComponent(t.details||t.model||'')+'\',\''+encodeURIComponent(t.servType||'')+'\') " class="bg-[#004a99] hover:bg-blue-700 text-white text-[8px] font-black px-2 py-1 rounded-lg transition-all not-italic uppercase">JOB CARD</button>'+
+                        '</div>';
+                    col.appendChild(card);
+                }
+            });
+            document.querySelectorAll('[id^="load-bar-"]').forEach(b => { b.style.width='0%'; b.className='bg-[#004a99] h-full transition-all'; });
+            document.querySelectorAll('[id^="load-text-"]').forEach(t => { t.innerText='0H / 8H'; });
+            Object.keys(dailyLoad).forEach(date => {
+                const m = dailyLoad[date], p = Math.min((m/480)*100,100);
+                const bar = document.getElementById('load-bar-'+date), txt = document.getElementById('load-text-'+date);
+                if (bar) { bar.style.width=p+'%'; bar.className=(p>=100?'bg-purple-600':p>85?'bg-red-500':p>65?'bg-orange-500':'bg-[#004a99]')+' h-full transition-all'; }
+                if (txt) txt.innerText = m>=480?'FULL DAY':(m/60).toFixed(1)+'H / 8H';
+            });
+        }
+
+        // ---- MODAL ----
         function openForm(type) {
             document.getElementById('taskModal').classList.remove('hidden');
-            document.getElementById('f_id').value = "";
-            document.getElementById('modalTitle').innerText = (type === 'Servicing' ? 'ORDRE DE SERVICE' : 'FICHE DE MONTAGE');
+            document.getElementById('f_id').value = '';
+            document.getElementById('f_fbid').value = '';
+            document.getElementById('modalTitle').innerText = type==='Servicing'?'ORDRE DE SERVICE':'FICHE DE MONTAGE';
             document.getElementById('f_date').value = formatDateISO(new Date());
-            document.getElementById('f_status').innerHTML = STATUS_OPTIONS[type].map(o => `<option value="${o}">${o}</option>`).join('');
-            document.getElementById('servicingFields').classList.toggle('hidden', type !== 'Servicing');
-            document.getElementById('montageFields').classList.toggle('hidden', type !== 'Montage');
-            // Cacher le bouton supprimer sur une nouvelle fiche
+            document.getElementById('f_status').innerHTML = STATUS_OPTIONS[type].map(o=>'<option value="'+o+'">'+o+'</option>').join('');
+            document.getElementById('servicingFields').classList.toggle('hidden', type!=='Servicing');
+            document.getElementById('montageFields').classList.toggle('hidden', type!=='Montage');
             document.getElementById('deleteWrapper').classList.add('hidden');
-            ['f_name', 'f_servModel', 'f_phone', 'f_model', 'f_comment'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).value = ""; });
+            ['f_name','f_servModel','f_phone','f_model','f_comment'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
         }
 
         function editTask(id) {
-            const t = localData.find(x => x.id == id);
-            if(!t) return;
-            openForm(t.type);
-            document.getElementById('f_id').value      = t.id;
-            document.getElementById('f_name').value    = t.name    || "";
-            document.getElementById('f_date').value    = formatDateISO(t.date);
-            document.getElementById('f_status').value  = t.status  || "";
-            document.getElementById('f_comment').value = t.notes   || t.comment || "";
-            if(t.type === 'Servicing') {
-                document.getElementById('f_servModel').value = t.details  || "";
-                document.getElementById('f_phone').value     = t.phone    || "";
-                document.getElementById('f_servType').value  = t.servType || t.bikes || "Minor Servicing";
+            const t = localData.find(x => x.id===id);
+            if (!t) return;
+            const type = t.type||'Servicing';
+            openForm(type);
+            document.getElementById('f_fbid').value   = t.id;
+            document.getElementById('f_name').value   = t.name||t.client||'';
+            document.getElementById('f_date').value   = formatDateISO(t.date);
+            document.getElementById('f_status').value = t.status||'';
+            document.getElementById('f_comment').value= t.notes||t.comment||'';
+            if (type==='Servicing') {
+                document.getElementById('f_servModel').value = t.details||t.model||'';
+                document.getElementById('f_phone').value     = t.phone||'';
+                document.getElementById('f_servType').value  = t.servType||t.bikes||'Minor Servicing';
             } else {
-                document.getElementById('f_model').value   = t.details || "";
-                document.getElementById('f_reqType').value = t.reqType || t.size || "Stock";
+                document.getElementById('f_model').value   = t.details||t.model||'';
+                document.getElementById('f_reqType').value = t.reqType||t.size||'Stock';
             }
-            // Afficher le bouton supprimer seulement en mode édition
             document.getElementById('deleteWrapper').classList.remove('hidden');
         }
 
-        // Envoi vers Google Apps Script — fetch no-cors SANS Content-Type (évite le preflight)
-        async function sendToGAS(payload) {
-            try {
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode:   'no-cors',
-                    body:   JSON.stringify(payload)
-                });
-                return true;
-            } catch(e) {
-                console.error('GAS error:', e);
-                return false;
-            }
-        }
-
+        // ---- FIREBASE SAVE ----
         async function saveToSheets() {
             const btn = document.getElementById('saveBtn');
-            btn.innerText = "ENVOI...";
-            btn.disabled  = true;
-
-            const type = document.getElementById('modalTitle').innerText.includes('SERVICE') ? 'Servicing' : 'Montage';
-            const taskId = document.getElementById('f_id').value || ("T-" + Date.now());
-            const payload = {
-                action: 'add_task',
-                task: {
-                    id:      taskId,
-                    type:    type,
-                    client:  document.getElementById('f_name').value,
-                    date:    document.getElementById('f_date').value,
-                    status:  document.getElementById('f_status').value,
-                    phone:   (document.getElementById('f_phone') ? document.getElementById('f_phone').value : '') || "",
-                    email:   "",
-                    details: type === 'Servicing' ? document.getElementById('f_servModel').value : document.getElementById('f_model').value,
-                    size:    type === 'Montage'   ? document.getElementById('f_reqType').value   : "",
-                    notes:   document.getElementById('f_comment').value,
-                    bikes:   type === 'Servicing' ? document.getElementById('f_servType').value  : document.getElementById('f_model').value
-                }
+            btn.innerText = 'ENVOI...'; btn.disabled = true;
+            const type  = document.getElementById('modalTitle').innerText.includes('SERVICE')?'Servicing':'Montage';
+            const fbId  = document.getElementById('f_fbid').value;
+            const obj   = {
+                type, name: document.getElementById('f_name').value, client: document.getElementById('f_name').value,
+                date: document.getElementById('f_date').value, status: document.getElementById('f_status').value,
+                phone: (document.getElementById('f_phone')?document.getElementById('f_phone').value:'')||'',
+                details: type==='Servicing'?document.getElementById('f_servModel').value:document.getElementById('f_model').value,
+                model:   type==='Servicing'?document.getElementById('f_servModel').value:document.getElementById('f_model').value,
+                size:    type==='Montage'?document.getElementById('f_reqType').value:'',
+                notes:   document.getElementById('f_comment').value,
+                servType:type==='Servicing'?document.getElementById('f_servType').value:'',
+                bikes:   type==='Servicing'?document.getElementById('f_servType').value:document.getElementById('f_model').value,
+                updatedAt: new Date().toISOString()
             };
-
-            // Mise à jour locale immédiate — la carte apparait tout de suite sans attendre le sheet
-            const taskObj = {
-                id:       payload.task.id,
-                type:     payload.task.type,
-                name:     payload.task.client,
-                date:     payload.task.date,
-                status:   payload.task.status,
-                phone:    payload.task.phone,
-                details:  payload.task.details,
-                notes:    payload.task.notes,
-                servType: payload.task.bikes,
-                reqType:  payload.task.size,
-                bikes:    payload.task.bikes,
-                size:     payload.task.size
-            };
-            const idx = localData.findIndex(function(x){ return x.id === taskId; });
-            if (idx >= 0) localData[idx] = taskObj;
-            else localData.push(taskObj);
-
-            closeModal();
-            buildCalendar();
-            load();
-
-            // Envoie en arrière-plan
-            sendToGAS(payload);
-
-            btn.innerText = "ENREGISTRER LA FICHE";
-            btn.disabled  = false;
+            try {
+                if (fbId) { await window._updateDoc(window._doc('tasks', fbId), obj); }
+                else { obj.createdAt = new Date().toISOString(); await window._addDoc(window._col('tasks'), obj); }
+                closeModal();
+                await load();
+            } catch(e) { alert('Erreur Firebase : '+e.message); }
+            finally { btn.innerText='ENREGISTRER LA FICHE'; btn.disabled=false; }
         }
 
+        // ---- FIREBASE DELETE ----
         async function deleteTask() {
-            const id = document.getElementById('f_id').value;
-            if (!id) { alert('Aucune fiche sélectionnée.'); return; }
-            if (!confirm('Supprimer cette fiche ? Cette action est irréversible.')) return;
-
-            // Suppression locale immédiate
-            localData = localData.filter(function(x){ return x.id !== id; });
-            closeModal();
-            buildCalendar();
-            load();
-
-            // Envoie en arrière-plan
-            sendToGAS({ action: 'delete_task', id: id });
+            const fbId = document.getElementById('f_fbid').value;
+            if (!fbId || !confirm('Supprimer cette fiche ?')) return;
+            try {
+                await window._deleteDoc(window._doc('tasks', fbId));
+                localData = localData.filter(x => x.id!==fbId);
+                closeModal(); renderCards();
+            } catch(e) { alert('Erreur : '+e.message); }
         }
 
-        function closeModal() { document.getElementById('taskModal').classList.add('hidden'); }
+        function closeModal()   { document.getElementById('taskModal').classList.add('hidden'); }
+        function openJobCard(e, name, phone, model, service) {
+            e.stopPropagation();
+            window.open('job-card.html?name='+name+'&phone='+phone+'&model='+model+'&service='+service,'_blank');
+        }
 
-        function closeModal() { document.getElementById('taskModal').classList.add('hidden'); }
-
-
-        // ===================== RAPPORT =====================
+        // ---- RAPPORT ----
         async function openRapport() {
             document.getElementById('rapportPanel').classList.add('open');
             document.getElementById('rapportBackdrop').classList.remove('hidden');
-
-            // Si données pas encore chargées ou vides, on récupère depuis Apps Script
-            if (rapportData.length === 0) {
-                await loadRapportData();
-            }
+            if (!rapportData.length) await loadRapportData();
             renderRapport();
         }
-
         function closeRapport() {
             document.getElementById('rapportPanel').classList.remove('open');
             document.getElementById('rapportBackdrop').classList.add('hidden');
         }
-
         async function loadRapportData() {
-            document.getElementById('rapportList').innerHTML = '<p class="text-slate-400 text-xs not-italic normal-case text-center py-8">Chargement des données...</p>';
+            document.getElementById('rapportList').innerHTML='<p class="text-slate-400 text-xs not-italic normal-case text-center py-8">Chargement Firebase...</p>';
             try {
-                // Charge les tasks du planning (onglet Tasks)
-                const resTasks = await fetch(SCRIPT_URL + "?getTasks=true");
-                const tasks = await resTasks.json();
-
-                // Charge l'historique Servicing_Requests via Apps Script
-                const resHist = await fetch(SCRIPT_URL + "?getHistory=true");
-                const hist = await resHist.json();
-
-                // Fusionne les deux sources
-                // Tasks → déjà au bon format
-                const fromTasks = tasks.map(t => ({
-                    source: 'Planning',
-                    type: t.type,
-                    name: t.name || '',
-                    model: t.details || '',
-                    servType: t.servType || t.bikes || '',
-                    status: t.status || '',
-                    date: formatDateISO(t.date)
-                }));
-
-                // Servicing_Requests → mapper les colonnes
-                const fromHist = hist.map(h => ({
-                    source: 'Historique',
-                    type: 'Servicing',
-                    name: h.name || '',
-                    model: h.model || '',
-                    servType: h.service || '',
-                    status: h.status || '',
-                    date: h.date || ''  // déjà en dd/MM/yyyy ou ISO depuis le script
-                }));
-
-                rapportData = [...fromTasks, ...fromHist].filter(r => r.date);
-            } catch(e) {
-                console.error(e);
-                document.getElementById('rapportList').innerHTML = '<p class="text-red-400 text-xs not-italic normal-case text-center py-8">Erreur de chargement. Vérifiez que le Apps Script est bien déployé.</p>';
-            }
+                const [snapT, snapH] = await Promise.all([
+                    window._getDocs(window._col('tasks')),
+                    window._getDocs(window._col('servicing_requests'))
+                ]);
+                const fromT=[], fromH=[];
+                snapT.forEach(d => { const t=d.data(); fromT.push({source:'Planning',type:t.type||'Servicing',name:t.name||t.client||'',model:t.details||t.model||'',servType:t.servType||t.bikes||'',status:t.status||'',date:t.date||''}); });
+                snapH.forEach(d => { const h=d.data(); fromH.push({source:'Historique',type:'Servicing',name:h.name||'',model:h.model||'',servType:h.service||'',status:h.status||'',date:h.date||''}); });
+                rapportData = [...fromT,...fromH].filter(r=>r.date);
+            } catch(e) { document.getElementById('rapportList').innerHTML='<p class="text-red-400 text-xs not-italic normal-case text-center py-8">Erreur Firebase.</p>'; }
         }
-
         function setPeriod(p) {
-            currentPeriod = p;
-            document.querySelectorAll('.period-btn').forEach(b => {
-                b.className = 'period-btn px-3 py-1.5 rounded-lg text-[9px] font-black uppercase not-italic bg-slate-100 text-slate-600 hover:bg-slate-200';
-            });
-            const ids = { week: 'pWeek', month: 'pMonth', all: 'pAll' };
-            document.getElementById(ids[p]).className = 'period-btn px-3 py-1.5 rounded-lg text-[9px] font-black uppercase not-italic bg-[#004a99] text-white';
+            currentPeriod=p;
+            document.querySelectorAll('.period-btn').forEach(b => b.className='period-btn px-3 py-1.5 rounded-lg text-[9px] font-black uppercase not-italic bg-slate-100 text-slate-600 hover:bg-slate-200');
+            document.getElementById({week:'pWeek',month:'pMonth',all:'pAll'}[p]).className='period-btn px-3 py-1.5 rounded-lg text-[9px] font-black uppercase not-italic bg-[#004a99] text-white';
             renderRapport();
         }
-
         function filterByPeriod(data) {
-            const now = new Date();
+            const now=new Date();
             return data.filter(r => {
-                // Parse date (ISO ou dd/MM/yyyy)
-                let d;
-                if (r.date && r.date.includes('/')) {
-                    const parts = r.date.split('/');
-                    d = new Date(parts[2], parts[1]-1, parts[0]);
-                } else {
-                    d = new Date(r.date);
-                }
-                if (isNaN(d)) return false;
-                if (currentPeriod === 'week') {
-                    const diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
-                    const monday = new Date(now); monday.setDate(now.getDate() + diff); monday.setHours(0,0,0,0);
-                    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
-                    return d >= monday && d <= sunday;
-                }
-                if (currentPeriod === 'month') {
-                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                }
+                const d = r.date&&r.date.includes('/')?(()=>{const p=r.date.split('/');return new Date(p[2],p[1]-1,p[0]);})():new Date(r.date);
+                if(isNaN(d)) return false;
+                if(currentPeriod==='week'){const diff=now.getDay()===0?-6:1-now.getDay(),m=new Date(now);m.setDate(now.getDate()+diff);m.setHours(0,0,0,0);const s=new Date(m);s.setDate(m.getDate()+6);s.setHours(23,59,59,999);return d>=m&&d<=s;}
+                if(currentPeriod==='month') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
                 return true;
             });
         }
-
         function parseDateKey(r) {
-            if (r.date && r.date.includes('/')) {
-                const parts = r.date.split('/');
-                return parts[2] + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
-            }
-            return r.date;
+            if(r.date&&r.date.includes('/')){const p=r.date.split('/');return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');} return r.date;
         }
-
         function renderRapport() {
-            const filtered = filterByPeriod(rapportData);
-
-            // Totaux globaux
-            const totalServ  = filtered.filter(r => r.type === 'Servicing').length;
-            const totalMont  = filtered.filter(r => r.type === 'Montage').length;
-            const totalDone  = filtered.filter(r => (r.status || '').toLowerCase().includes('termin')).length;
-            const totalPend  = filtered.filter(r => !(r.status || '').toLowerCase().includes('termin')).length;
-            document.getElementById('rapportTotals').innerHTML = `
-                <div class="bg-blue-50 rounded-xl p-3 text-center">
-                    <p class="text-2xl font-black text-[#004a99] italic">${totalServ}</p>
-                    <p class="text-[8px] text-blue-400 font-black not-italic uppercase tracking-widest">Servicing</p>
-                </div>
-                <div class="bg-orange-50 rounded-xl p-3 text-center">
-                    <p class="text-2xl font-black text-[#e67e22] italic">${totalMont}</p>
-                    <p class="text-[8px] text-orange-400 font-black not-italic uppercase tracking-widest">Montage</p>
-                </div>
-                <div class="bg-emerald-50 rounded-xl p-3 text-center">
-                    <p class="text-2xl font-black text-emerald-600 italic">${totalDone}</p>
-                    <p class="text-[8px] text-emerald-400 font-black not-italic uppercase tracking-widest">Terminés</p>
-                </div>
-                <div class="bg-slate-50 rounded-xl p-3 text-center">
-                    <p class="text-2xl font-black text-slate-600 italic">${totalServ + totalMont}</p>
-                    <p class="text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest">Total</p>
-                </div>`;
-
-            // Grouper par date
-            const byDate = {};
-            filtered.forEach(r => {
-                const key = parseDateKey(r);
-                if (!key) return;
-                if (!byDate[key]) byDate[key] = [];
-                byDate[key].push(r);
-            });
-
-            const sortedDates = Object.keys(byDate).sort((a,b) => new Date(b) - new Date(a));
-
-            if (sortedDates.length === 0) {
-                document.getElementById('rapportList').innerHTML = '<p class="text-slate-400 text-xs not-italic normal-case text-center py-8">Aucune donnée pour cette période.</p>';
-                return;
-            }
-
-            document.getElementById('rapportList').innerHTML = sortedDates.map(date => {
-                const items = byDate[date];
-                const serv  = items.filter(r => r.type === 'Servicing');
-                const mont  = items.filter(r => r.type === 'Montage');
-                const done  = items.filter(r => (r.status||'').toLowerCase().includes('termin')).length;
-                const dateLabel = formatDateFR(date);
-
-                const rows = items.map(r => {
-                    const isServ = r.type === 'Servicing';
-                    const statusColor = (r.status||'').toLowerCase().includes('termin') ? 'text-emerald-600'
-                        : (r.status||'').toLowerCase().includes('cours') ? 'text-green-600'
-                        : (r.status||'').toLowerCase().includes('attente') ? 'text-yellow-600'
-                        : (r.status||'').toLowerCase().includes('r\xe9paration') ? 'text-red-500'
-                        : 'text-slate-400';
-                    return `<tr class="border-b border-slate-50 hover:bg-slate-50">
-                        <td class="py-2 pr-3">
-                            <span class="inline-block px-2 py-0.5 rounded text-[8px] font-black not-italic ${isServ ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}">${r.type}</span>
-                        </td>
-                        <td class="py-2 pr-3 font-black text-[10px] text-slate-800 italic">${r.name || '—'}</td>
-                        <td class="py-2 pr-3 text-[9px] text-slate-500 not-italic normal-case">${r.model || '—'}</td>
-                        <td class="py-2 pr-3 text-[9px] text-slate-500 not-italic normal-case">${r.servType || '—'}</td>
-                        <td class="py-2 text-[9px] font-black ${statusColor} not-italic">${r.status || '—'}</td>
-                    </tr>`;
+            const f=filterByPeriod(rapportData), tS=f.filter(r=>r.type==='Servicing').length, tM=f.filter(r=>r.type==='Montage').length, tD=f.filter(r=>isTermine(r.status)).length;
+            document.getElementById('rapportTotals').innerHTML=
+                '<div class="bg-blue-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-[#004a99] italic">'+tS+'</p><p class="text-[8px] text-blue-400 font-black not-italic uppercase tracking-widest">Servicing</p></div>'+
+                '<div class="bg-orange-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-[#e67e22] italic">'+tM+'</p><p class="text-[8px] text-orange-400 font-black not-italic uppercase tracking-widest">Montage</p></div>'+
+                '<div class="bg-emerald-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-emerald-600 italic">'+tD+'</p><p class="text-[8px] text-emerald-400 font-black not-italic uppercase tracking-widest">Terminés</p></div>'+
+                '<div class="bg-slate-50 rounded-xl p-3 text-center"><p class="text-2xl font-black text-slate-600 italic">'+(tS+tM)+'</p><p class="text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest">Total</p></div>';
+            const byDate={};
+            f.forEach(r=>{const k=parseDateKey(r);if(!k)return;if(!byDate[k])byDate[k]=[];byDate[k].push(r);});
+            const sorted=Object.keys(byDate).sort((a,b)=>new Date(b)-new Date(a));
+            if(!sorted.length){document.getElementById('rapportList').innerHTML='<p class="text-slate-400 text-xs not-italic normal-case text-center py-8">Aucune donnée pour cette période.</p>';return;}
+            document.getElementById('rapportList').innerHTML=sorted.map(date=>{
+                const items=byDate[date],serv=items.filter(r=>r.type==='Servicing'),mont=items.filter(r=>r.type==='Montage'),done=items.filter(r=>isTermine(r.status)).length;
+                const dl=new Date(date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+                const rows=items.map(r=>{
+                    const sc=isTermine(r.status)?'text-emerald-600':(r.status||'').toLowerCase().includes('cours')?'text-green-600':(r.status||'').toLowerCase().includes('attente')?'text-yellow-600':'text-slate-400';
+                    return '<tr class="border-b border-slate-50 hover:bg-slate-50"><td class="py-2 pr-3"><span class="inline-block px-2 py-0.5 rounded text-[8px] font-black not-italic '+(r.type==='Servicing'?'bg-blue-100 text-blue-600':'bg-orange-100 text-orange-600')+'">'+r.type+'</span></td><td class="py-2 pr-3 font-black text-[10px] italic">'+(r.name||'—')+'</td><td class="py-2 pr-3 text-[9px] not-italic normal-case">'+(r.model||'—')+'</td><td class="py-2 pr-3 text-[9px] not-italic normal-case">'+(r.servType||'—')+'</td><td class="py-2 text-[9px] font-black '+sc+' not-italic">'+(r.status||'—')+'</td></tr>';
                 }).join('');
-
-                return `<div class="day-block pl-4 py-1">
-                    <div class="flex justify-between items-center mb-2">
-                        <div>
-                            <p class="text-[13px] font-black text-slate-800 italic uppercase">${dateLabel}</p>
-                            <div class="flex gap-3 mt-1">
-                                <span class="text-[9px] font-black text-[#004a99] not-italic">${serv.length} Servicing</span>
-                                <span class="text-[9px] font-black text-[#e67e22] not-italic">${mont.length} Montage</span>
-                                <span class="text-[9px] font-black text-emerald-600 not-italic">${done} Terminés</span>
-                            </div>
-                        </div>
-                        <span class="text-2xl font-black text-slate-200 italic">${items.length}</span>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead>
-                                <tr class="border-b-2 border-slate-100">
-                                    <th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest pr-3">Type</th>
-                                    <th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest pr-3">Client</th>
-                                    <th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest pr-3">Modèle</th>
-                                    <th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest pr-3">Service</th>
-                                    <th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase tracking-widest">Statut</th>
-                                </tr>
-                            </thead>
-                            <tbody>${rows}</tbody>
-                        </table>
-                    </div>
-                </div>`;
+                return '<div class="day-block pl-4 py-1 mb-4"><div class="flex justify-between items-center mb-2"><div><p class="text-[13px] font-black text-slate-800 italic uppercase">'+dl+'</p><div class="flex gap-3 mt-1"><span class="text-[9px] font-black text-[#004a99] not-italic">'+serv.length+' Servicing</span><span class="text-[9px] font-black text-[#e67e22] not-italic">'+mont.length+' Montage</span><span class="text-[9px] font-black text-emerald-600 not-italic">'+done+' Terminés</span></div></div><span class="text-2xl font-black text-slate-200 italic">'+items.length+'</span></div><div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="border-b-2 border-slate-100"><th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase pr-3">Type</th><th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase pr-3">Client</th><th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase pr-3">Modèle</th><th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase pr-3">Service</th><th class="pb-1 text-[8px] text-slate-400 font-black not-italic uppercase">Statut</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
             }).join('');
         }
-
         function exportCSV() {
-            const filtered = filterByPeriod(rapportData);
-            if (filtered.length === 0) { alert('Aucune donnée à exporter.'); return; }
-            const header = ['Date','Type','Client','Modèle','Service','Statut','Source'];
-            const lines = filtered.map(r => [
-                parseDateKey(r), r.type, r.name, r.model, r.servType, r.status, r.source
-            ].map(v => '"' + (v||'').replace(/"/g,'""') + '"').join(','));
-            const csv = [header.join(','), ...lines].join('\n');
-            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'rapport_emcar_' + formatDateISO(new Date()) + '.csv';
-            a.click(); URL.revokeObjectURL(url);
-        }
-
-        buildCalendar();
-        load();
-
-        // Enregistrement du Service Worker PWA
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(function(reg) { console.log('SW enregistré:', reg.scope); })
-                .catch(function(err) { console.log('SW erreur:', err); });
+            const f=filterByPeriod(rapportData);
+            if(!f.length){alert('Aucune donnée.');return;}
+            const csv=[['Date','Type','Client','Modèle','Service','Statut','Source'].join(','),...f.map(r=>[parseDateKey(r),r.type,r.name,r.model,r.servType,r.status,r.source].map(v=>'"'+(v||'').replace(/"/g,'""')+'"').join(','))].join('\n');
+            const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));a.download='rapport_emcar_'+formatDateISO(new Date())+'.csv';a.click();
         }
     </script>
 </body>
